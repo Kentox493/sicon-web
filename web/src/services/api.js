@@ -83,4 +83,28 @@ export const scansAPI = {
     },
 };
 
+// Reports API
+export const reportsAPI = {
+    list: async () => {
+        const response = await api.get('/api/reports/');
+        return response.data;
+    },
+
+    generate: async (scanId) => {
+        const response = await api.post(`/api/reports/generate/${scanId}`);
+        return response.data;
+    },
+
+    download: async (scanId) => {
+        const response = await api.get(`/api/reports/download/${scanId}`, {
+            responseType: 'blob',
+        });
+        return response.data;
+    },
+
+    delete: async (reportId) => {
+        await api.delete(`/api/reports/${reportId}`);
+    },
+};
+
 export default api;

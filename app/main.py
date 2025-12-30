@@ -5,7 +5,7 @@ import json
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.routers import auth, scans
+from app.routers import auth, scans, reports
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -31,6 +31,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router)
 app.include_router(scans.router)
+app.include_router(reports.router)
 
 # WebSocket connection manager
 class ConnectionManager:
