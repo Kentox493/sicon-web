@@ -1,6 +1,6 @@
 """
 PDF Report Generator - Polished Neon Dark Theme
-Clean layout with proper table sizing and no text overflow.
+Clean layout with proper text wrapping and page management.
 """
 
 import os
@@ -11,7 +11,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, Image, KeepTogether
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, Image
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 from app.services.ai_summary import generate_ai_summary, generate_basic_summary
@@ -46,10 +46,10 @@ def create_styles():
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle('STitle', fontName='Helvetica-Bold', fontSize=20, textColor=WHITE, alignment=TA_CENTER, spaceAfter=5))
     styles.add(ParagraphStyle('SSubtitle', fontName='Helvetica', fontSize=11, textColor=GREEN, alignment=TA_CENTER, spaceAfter=15))
-    styles.add(ParagraphStyle('SHeading', fontName='Helvetica-Bold', fontSize=12, textColor=GREEN, spaceBefore=15, spaceAfter=8))
+    styles.add(ParagraphStyle('SHeading', fontName='Helvetica-Bold', fontSize=12, textColor=GREEN, spaceBefore=10, spaceAfter=6))
     styles.add(ParagraphStyle('SBody', fontName='Courier', fontSize=9, textColor=WHITE, leading=12, spaceAfter=4))
     styles.add(ParagraphStyle('SSmall', fontName='Courier', fontSize=7, textColor=GRAY, alignment=TA_CENTER))
-    styles.add(ParagraphStyle('SCell', fontName='Courier', fontSize=8, textColor=WHITE, leading=10))
+    styles.add(ParagraphStyle('SCell', fontName='Courier', fontSize=8, textColor=WHITE, leading=10, wordWrap='CJK'))
     return styles
 
 
@@ -57,7 +57,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
                          use_ai: bool = False, api_key: str = None) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, 
-        rightMargin=20*mm, leftMargin=20*mm, topMargin=18*mm, bottomMargin=18*mm)
+        rightMargin=15*mm, leftMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
     
     styles = create_styles()
     story = []
@@ -65,13 +65,13 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
     # Header
     try:
         if os.path.exists(LOGO_PATH):
-            img = Image(LOGO_PATH, width=2.5*inch, height=1.25*inch, kind='proportional')
+            img = Image(LOGO_PATH, width=2*inch, height=1*inch, kind='proportional')
             img.hAlign = 'CENTER'
             story.append(img)
     except:
         story.append(Paragraph("S1C0N", styles['STitle']))
     
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 5))
     story.append(Paragraph("SECURITY RECONNAISSANCE REPORT", styles['SSubtitle']))
     
     # Info Box
@@ -81,17 +81,17 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         ["Date:", datetime.now().strftime("%Y-%m-%d %H:%M")],
         ["Analyst:", user_data.get('username', 'Unknown')],
     ]
-    t = Table(info, colWidths=[70, 380])
+    t = Table(info, colWidths=[60, 400])
     t.setStyle(TableStyle([
         ('TEXTCOLOR', (0, 0), (0, -1), GREEN),
         ('TEXTCOLOR', (1, 0), (1, -1), WHITE),
         ('FONTNAME', (0, 0), (-1, -1), 'Courier-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LINEBELOW', (0, -1), (-1, -1), 0.5, GREEN),
     ]))
     story.append(t)
-    story.append(Spacer(1, 15))
+    story.append(Spacer(1, 10))
     
     # Summary
     ai_findings = []
@@ -104,28 +104,28 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         summary_text = generate_basic_summary(scan_data)
         story.append(Paragraph("SUMMARY", styles['SHeading']))
     
-    summary_box = Table([[Paragraph(summary_text, styles['SBody'])]], colWidths=[450])
+    summary_box = Table([[Paragraph(summary_text, styles['SBody'])]], colWidths=[480])
     summary_box.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), DARK_GREEN),
         ('BOX', (0, 0), (-1, -1), 1, GREEN),
-        ('LEFTPADDING', (0, 0), (-1, -1), 10),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-        ('TOPPADDING', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
     ]))
     story.append(summary_box)
-    story.append(Spacer(1, 15))
+    story.append(Spacer(1, 10))
     
-    # AI Findings Table
+    # AI Findings Table (with proper text wrapping)
     if use_ai and ai_findings:
         story.append(Paragraph("KEY FINDINGS & CVE REFERENCES", styles['SHeading']))
         
         data = [["FINDING", "SEV", "CVE", "ACTION"]]
-        for f in ai_findings[:12]:
-            finding = str(f.get('finding', ''))[:45]
-            sev = str(f.get('severity', 'Info'))[:8]
-            cve = str(f.get('cve', 'N/A'))[:15]
-            action = str(f.get('action', f.get('recommendation', '')))[:35]
+        for f in ai_findings[:10]:
+            finding = str(f.get('finding', ''))
+            sev = str(f.get('severity', 'Info'))[:10]
+            cve = str(f.get('cve', 'N/A'))[:18]
+            action = str(f.get('action', f.get('recommendation', '')))
             data.append([
                 Paragraph(finding, styles['SCell']),
                 sev,
@@ -133,7 +133,8 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
                 Paragraph(action, styles['SCell'])
             ])
         
-        ft = Table(data, colWidths=[140, 45, 85, 180])
+        # Wider columns for text wrapping
+        ft = Table(data, colWidths=[130, 50, 90, 210])
         style_list = [
             ('GRID', (0, 0), (-1, -1), 0.5, GREEN),
             ('BACKGROUND', (0, 0), (-1, 0), GREEN),
@@ -146,8 +147,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ]
-        # Severity colors
-        for i, f in enumerate(ai_findings[:12], 1):
+        for i, f in enumerate(ai_findings[:10], 1):
             sev = str(f.get('severity', '')).lower()
             if 'critical' in sev:
                 style_list.append(('TEXTCOLOR', (1, i), (1, i), RED))
@@ -157,17 +157,17 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
                 style_list.append(('TEXTCOLOR', (1, i), (1, i), YELLOW))
         
         ft.setStyle(TableStyle(style_list))
-        story.append(KeepTogether([ft]))
-        story.append(Spacer(1, 15))
+        story.append(ft)
+        story.append(Spacer(1, 10))
     
     # Chart
     try:
         bar_buf = create_findings_bar_chart(scan_data)
-        chart = Image(bar_buf, width=4.5*inch, height=1.8*inch)
+        chart = Image(bar_buf, width=4*inch, height=1.6*inch)
         chart.hAlign = 'CENTER'
         story.append(Paragraph("STATISTICS", styles['SHeading']))
         story.append(chart)
-        story.append(Spacer(1, 10))
+        story.append(Spacer(1, 8))
     except:
         pass
 
@@ -180,43 +180,59 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         wt = Table([
             ["Status", "PROTECTED" if waf.get('detected') else "EXPOSED"],
             ["Name", waf.get('waf_name', 'N/A') or 'N/A'],
-        ], colWidths=[100, 350])
+        ], colWidths=[80, 400])
         wt.setStyle(simple_table_style())
-        story.append(KeepTogether([wt]))
-        story.append(Spacer(1, 10))
+        story.append(wt)
+        story.append(Spacer(1, 8))
 
-    # Ports
+    # Ports - Split into chunks if too many
     if 'port' in results:
         ports = results['port'].get('open_ports', [])
         if ports:
             story.append(Paragraph(f"OPEN PORTS ({len(ports)})", styles['SHeading']))
-            pd = [["Port", "Service", "Version", "Risk"]]
-            for p in ports[:15]:
-                pd.append([
-                    f"{p.get('port')}/{p.get('protocol', 'tcp')}",
-                    p.get('service', '?'),
-                    (p.get('version', '') or '')[:20],
-                    p.get('risk', 'low').upper()
-                ])
-            pt = Table(pd, colWidths=[70, 100, 180, 100])
-            pt.setStyle(simple_table_style(header=True))
-            story.append(KeepTogether([pt]))
-            story.append(Spacer(1, 10))
+            
+            # Limit to 12 per table to avoid page overflow
+            for chunk_start in range(0, min(len(ports), 24), 12):
+                chunk = ports[chunk_start:chunk_start+12]
+                pd = [["Port", "Service", "Version", "Risk"]]
+                for p in chunk:
+                    pd.append([
+                        f"{p.get('port')}/{p.get('protocol', 'tcp')}",
+                        p.get('service', '?'),
+                        (p.get('version', '') or '')[:25],
+                        p.get('risk', 'low').upper()
+                    ])
+                pt = Table(pd, colWidths=[70, 100, 210, 100])
+                pt.setStyle(simple_table_style(header=True))
+                story.append(pt)
+                if chunk_start + 12 < min(len(ports), 24):
+                    story.append(Spacer(1, 4))
+            story.append(Spacer(1, 8))
 
-    # Subdomains
+    # Subdomains - Split into chunks
     if 'subdo' in results:
         subs = results['subdo'].get('subdomains', [])
         count = results['subdo'].get('count', 0)
         if subs:
             story.append(Paragraph(f"SUBDOMAINS ({count})", styles['SHeading']))
-            sd = [["#", "Subdomain"]]
-            for i, s in enumerate(subs[:30], 1):
-                name = s.get('subdomain', s) if isinstance(s, dict) else s
-                sd.append([str(i), name])
-            st = Table(sd, colWidths=[30, 420])
-            st.setStyle(simple_table_style(header=True))
-            story.append(KeepTogether([st]))
-            story.append(Spacer(1, 10))
+            
+            # Split into chunks of 20
+            max_subs = min(len(subs), 60)
+            for chunk_start in range(0, max_subs, 20):
+                chunk = subs[chunk_start:chunk_start+20]
+                sd = [["#", "Subdomain"]]
+                for i, s in enumerate(chunk, chunk_start + 1):
+                    name = s.get('subdomain', s) if isinstance(s, dict) else s
+                    sd.append([str(i), name[:50]])
+                st = Table(sd, colWidths=[35, 445])
+                st.setStyle(simple_table_style(header=(chunk_start == 0)))
+                story.append(st)
+                if chunk_start + 20 < max_subs:
+                    story.append(Spacer(1, 4))
+            
+            if len(subs) > 60:
+                story.append(Paragraph(f"... and {len(subs) - 60} more subdomains", styles['SSmall']))
+            story.append(Spacer(1, 8))
 
     # Tech
     if 'tech' in results or 'cms' in results:
@@ -225,16 +241,16 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         if results.get('cms', {}).get('detected'):
             cms = results['cms']
             td.append(["CMS", f"{cms.get('cms_name', '')} {cms.get('cms_version', '')}"])
-        for t in results.get('tech', {}).get('technologies', [])[:10]:
+        for t in results.get('tech', {}).get('technologies', [])[:8]:
             name = t.get('name', t) if isinstance(t, dict) else t
-            td.append(["Tech", name])
+            td.append(["Tech", str(name)[:50]])
         if len(td) > 1:
-            tt = Table(td, colWidths=[80, 370])
+            tt = Table(td, colWidths=[70, 410])
             tt.setStyle(simple_table_style(header=True))
-            story.append(KeepTogether([tt]))
+            story.append(tt)
 
     # Footer
-    story.append(Spacer(1, 25))
+    story.append(Spacer(1, 20))
     story.append(HRFlowable(width="100%", thickness=0.5, color=GREEN))
     story.append(Paragraph(f"S1C0N | {datetime.now().strftime('%Y')}", styles['SSmall']))
 
