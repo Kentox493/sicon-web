@@ -8,7 +8,12 @@ import { useScanStore } from '../store/scanStore';
 
 const Dashboard = () => {
     const navigate = useNavigate();
-    const { startScan, isLoading, error, clearError } = useScanStore();
+    const { startScan, isLoading, error, clearError, fetchScans, scans } = useScanStore();
+
+    // Fetch scans on mount to get stats
+    React.useEffect(() => {
+        fetchScans();
+    }, [fetchScans]);
 
     const [targetUrl, setTargetUrl] = useState('');
     const [scanOptions, setScanOptions] = useState({
@@ -45,10 +50,12 @@ const Dashboard = () => {
         }
     };
 
+    // Calculate stats
+    const uniqueDomains = new Set(scans.map(s => s.target)).size;
+
     const stats = [
-        { label: 'Total Scans', value: '—', icon: Activity, color: 'text-blue-400' },
-        { label: 'Vulnerabilities', value: '—', icon: Shield, color: 'text-red-400' },
-        { label: 'Domains', value: '—', icon: Globe, color: 'text-green-400' },
+        { label: 'Total Scans', value: scans.length, icon: Activity, color: 'text-blue-400' },
+        { label: 'Unique Domains', value: uniqueDomains, icon: Globe, color: 'text-green-400' },
     ];
 
     return (
@@ -60,7 +67,7 @@ const Dashboard = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {stats.map((stat, index) => (
                     <Card key={index} className="hover:border-accent-primary/50 transition-colors cursor-default">
                         <CardContent className="p-6 flex items-center justify-between">
