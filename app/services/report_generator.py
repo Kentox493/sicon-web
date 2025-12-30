@@ -44,12 +44,12 @@ def add_background(canvas, doc):
 
 def create_styles():
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle('Title', fontName='Helvetica-Bold', fontSize=20, textColor=WHITE, alignment=TA_CENTER, spaceAfter=5))
-    styles.add(ParagraphStyle('Subtitle', fontName='Helvetica', fontSize=11, textColor=GREEN, alignment=TA_CENTER, spaceAfter=15))
-    styles.add(ParagraphStyle('Heading', fontName='Helvetica-Bold', fontSize=12, textColor=GREEN, spaceBefore=15, spaceAfter=8))
-    styles.add(ParagraphStyle('Body', fontName='Courier', fontSize=9, textColor=WHITE, leading=12, spaceAfter=4))
-    styles.add(ParagraphStyle('Small', fontName='Courier', fontSize=7, textColor=GRAY, alignment=TA_CENTER))
-    styles.add(ParagraphStyle('Cell', fontName='Courier', fontSize=8, textColor=WHITE, leading=10))
+    styles.add(ParagraphStyle('STitle', fontName='Helvetica-Bold', fontSize=20, textColor=WHITE, alignment=TA_CENTER, spaceAfter=5))
+    styles.add(ParagraphStyle('SSubtitle', fontName='Helvetica', fontSize=11, textColor=GREEN, alignment=TA_CENTER, spaceAfter=15))
+    styles.add(ParagraphStyle('SHeading', fontName='Helvetica-Bold', fontSize=12, textColor=GREEN, spaceBefore=15, spaceAfter=8))
+    styles.add(ParagraphStyle('SBody', fontName='Courier', fontSize=9, textColor=WHITE, leading=12, spaceAfter=4))
+    styles.add(ParagraphStyle('SSmall', fontName='Courier', fontSize=7, textColor=GRAY, alignment=TA_CENTER))
+    styles.add(ParagraphStyle('SCell', fontName='Courier', fontSize=8, textColor=WHITE, leading=10))
     return styles
 
 
@@ -69,10 +69,10 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
             img.hAlign = 'CENTER'
             story.append(img)
     except:
-        story.append(Paragraph("S1C0N", styles['Title']))
+        story.append(Paragraph("S1C0N", styles['STitle']))
     
     story.append(Spacer(1, 8))
-    story.append(Paragraph("SECURITY RECONNAISSANCE REPORT", styles['Subtitle']))
+    story.append(Paragraph("SECURITY RECONNAISSANCE REPORT", styles['SSubtitle']))
     
     # Info Box
     info = [
@@ -99,12 +99,12 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         ai_result = generate_ai_summary(scan_data, api_key)
         summary_text = ai_result.get("summary", "")
         ai_findings = ai_result.get("findings", [])
-        story.append(Paragraph("EXECUTIVE SUMMARY", styles['Heading']))
+        story.append(Paragraph("EXECUTIVE SUMMARY", styles['SHeading']))
     else:
         summary_text = generate_basic_summary(scan_data)
-        story.append(Paragraph("SUMMARY", styles['Heading']))
+        story.append(Paragraph("SUMMARY", styles['SHeading']))
     
-    summary_box = Table([[Paragraph(summary_text, styles['Body'])]], colWidths=[450])
+    summary_box = Table([[Paragraph(summary_text, styles['SBody'])]], colWidths=[450])
     summary_box.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), DARK_GREEN),
         ('BOX', (0, 0), (-1, -1), 1, GREEN),
@@ -118,7 +118,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
     
     # AI Findings Table
     if use_ai and ai_findings:
-        story.append(Paragraph("KEY FINDINGS & CVE REFERENCES", styles['Heading']))
+        story.append(Paragraph("KEY FINDINGS & CVE REFERENCES", styles['SHeading']))
         
         data = [["FINDING", "SEV", "CVE", "ACTION"]]
         for f in ai_findings[:12]:
@@ -127,10 +127,10 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
             cve = str(f.get('cve', 'N/A'))[:15]
             action = str(f.get('action', f.get('recommendation', '')))[:35]
             data.append([
-                Paragraph(finding, styles['Cell']),
+                Paragraph(finding, styles['SCell']),
                 sev,
                 cve,
-                Paragraph(action, styles['Cell'])
+                Paragraph(action, styles['SCell'])
             ])
         
         ft = Table(data, colWidths=[140, 45, 85, 180])
@@ -165,7 +165,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         bar_buf = create_findings_bar_chart(scan_data)
         chart = Image(bar_buf, width=4.5*inch, height=1.8*inch)
         chart.hAlign = 'CENTER'
-        story.append(Paragraph("STATISTICS", styles['Heading']))
+        story.append(Paragraph("STATISTICS", styles['SHeading']))
         story.append(chart)
         story.append(Spacer(1, 10))
     except:
@@ -176,7 +176,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
     # WAF
     if 'waf' in results:
         waf = results['waf']
-        story.append(Paragraph("WAF STATUS", styles['Heading']))
+        story.append(Paragraph("WAF STATUS", styles['SHeading']))
         wt = Table([
             ["Status", "PROTECTED" if waf.get('detected') else "EXPOSED"],
             ["Name", waf.get('waf_name', 'N/A') or 'N/A'],
@@ -189,7 +189,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
     if 'port' in results:
         ports = results['port'].get('open_ports', [])
         if ports:
-            story.append(Paragraph(f"OPEN PORTS ({len(ports)})", styles['Heading']))
+            story.append(Paragraph(f"OPEN PORTS ({len(ports)})", styles['SHeading']))
             pd = [["Port", "Service", "Version", "Risk"]]
             for p in ports[:15]:
                 pd.append([
@@ -208,7 +208,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         subs = results['subdo'].get('subdomains', [])
         count = results['subdo'].get('count', 0)
         if subs:
-            story.append(Paragraph(f"SUBDOMAINS ({count})", styles['Heading']))
+            story.append(Paragraph(f"SUBDOMAINS ({count})", styles['SHeading']))
             sd = [["#", "Subdomain"]]
             for i, s in enumerate(subs[:30], 1):
                 name = s.get('subdomain', s) if isinstance(s, dict) else s
@@ -220,7 +220,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
 
     # Tech
     if 'tech' in results or 'cms' in results:
-        story.append(Paragraph("TECHNOLOGIES", styles['Heading']))
+        story.append(Paragraph("TECHNOLOGIES", styles['SHeading']))
         td = [["Type", "Name"]]
         if results.get('cms', {}).get('detected'):
             cms = results['cms']
@@ -236,7 +236,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
     # Footer
     story.append(Spacer(1, 25))
     story.append(HRFlowable(width="100%", thickness=0.5, color=GREEN))
-    story.append(Paragraph(f"S1C0N | {datetime.now().strftime('%Y')}", styles['Small']))
+    story.append(Paragraph(f"S1C0N | {datetime.now().strftime('%Y')}", styles['SSmall']))
 
     doc.build(story, onFirstPage=add_background, onLaterPages=add_background)
     buffer.seek(0)
