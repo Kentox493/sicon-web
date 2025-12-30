@@ -1,8 +1,10 @@
 """
 AI Summary Service
 Generates professional executive summaries using Google Gemini API.
+Updated to use the new google-genai package.
 """
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 def generate_ai_summary(scan_data: dict, api_key: str = None) -> str:
     """
@@ -13,8 +15,7 @@ def generate_ai_summary(scan_data: dict, api_key: str = None) -> str:
         return generate_basic_summary(scan_data)
         
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        client = genai.Client(api_key=api_key)
         
         # Prepare context
         target = scan_data.get('target', 'Unknown')
@@ -36,7 +37,11 @@ def generate_ai_summary(scan_data: dict, api_key: str = None) -> str:
         Focus on business risk and security posture. Do not use markdown, just plain text paragraphs.
         """
         
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        
         return response.text.replace('*', '')  # Clean up any potential markdown
         
     except Exception as e:

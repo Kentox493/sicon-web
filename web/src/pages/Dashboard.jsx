@@ -91,7 +91,7 @@ const Dashboard = () => {
                         </div>
                     )}
 
-                    <div className="flex flex-col md:flex-row gap-4">
+                    <div className="flex flex-col gap-4">
                         <div className="flex-1">
                             <label className="text-sm font-medium text-text-secondary mb-2 block">Target URL / Domain</label>
                             <Input
@@ -101,10 +101,10 @@ const Dashboard = () => {
                                 onChange={(e) => setTargetUrl(e.target.value)}
                             />
                         </div>
-                        <div className="flex items-end">
+                        <div>
                             <Button
                                 size="lg"
-                                className="w-full md:w-auto font-bold text-base shadow-lg shadow-accent-primary/20 hover:shadow-accent-primary/40 transition-all"
+                                className="w-full font-bold text-base shadow-lg shadow-accent-primary/20 hover:shadow-accent-primary/40 transition-all"
                                 onClick={handleStartScan}
                                 disabled={!targetUrl}
                                 isLoading={isLoading}
