@@ -125,18 +125,28 @@ const Reports = () => {
                     {scans.length === 0 ? (
                         <p className="text-text-secondary text-center py-4">No completed scans. Run a scan first.</p>
                     ) : (
-                        <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {scans.map((scan) => (
-                                <div key={scan.id} className="flex items-center justify-between p-4 rounded-lg bg-background-tertiary/50 hover:bg-background-tertiary transition-colors border border-border/20">
-                                    <div className="min-w-0 flex-1">
-                                        <p className="font-mono text-sm text-accent-primary truncate">{scan.target}</p>
-                                        <p className="text-xs text-text-secondary mt-1">ID: #{scan.id} • {formatDate(scan.completed_at)}</p>
+                                <div key={scan.id} className="flex flex-col p-5 rounded-lg bg-background-tertiary/50 hover:bg-background-tertiary hover:border-accent-primary/50 transition-all border border-border/20 group h-full">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <Badge variant="outline" className="text-xs font-mono">{scan.scan_type.toUpperCase()}</Badge>
+                                                <span className="text-xs text-text-secondary">#{scan.id}</span>
+                                            </div>
+                                            <p className="font-mono text-base font-semibold text-accent-primary truncate" title={scan.target}>
+                                                {scan.target}
+                                            </p>
+                                            <p className="text-xs text-text-secondary mt-1">{formatDate(scan.completed_at)}</p>
+                                        </div>
                                     </div>
-                                    <div className="flex gap-2 ml-4">
+
+                                    <div className="flex gap-2 mt-auto pt-4 border-t border-border/10">
                                         {/* Standard Report */}
                                         <Button
                                             size="sm"
                                             variant="secondary"
+                                            className="flex-1"
                                             onClick={() => handleDownload(scan.id, scan.target, false)}
                                             disabled={downloading?.scanId === scan.id}
                                         >
@@ -144,7 +154,7 @@ const Reports = () => {
                                                 <Loader2 className="w-4 h-4 animate-spin" />
                                             ) : (
                                                 <>
-                                                    <File className="w-4 h-4 mr-1" />
+                                                    <File className="w-4 h-4 mr-2" />
                                                     Standard
                                                 </>
                                             )}
@@ -153,6 +163,7 @@ const Reports = () => {
                                         {/* AI Report */}
                                         <Button
                                             size="sm"
+                                            className="flex-1"
                                             onClick={() => handleDownload(scan.id, scan.target, true)}
                                             disabled={!hasAiKey || downloading?.scanId === scan.id}
                                             title={!hasAiKey ? 'Configure Gemini API key in Settings' : 'Generate AI-enhanced report'}
@@ -161,7 +172,7 @@ const Reports = () => {
                                                 <Loader2 className="w-4 h-4 animate-spin" />
                                             ) : (
                                                 <>
-                                                    <Sparkles className="w-4 h-4 mr-1" />
+                                                    <Sparkles className="w-4 h-4 mr-2" />
                                                     AI Report
                                                 </>
                                             )}

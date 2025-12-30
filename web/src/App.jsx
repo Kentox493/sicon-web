@@ -10,6 +10,8 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import { useAuthStore } from './store/authStore';
 
+import Landing from './pages/Landing'; // Import Landing
+
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, checkAuth } = useAuthStore();
@@ -32,7 +34,7 @@ const ProtectedRoute = ({ children }) => {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/landing" replace />;
   }
 
   return children;
@@ -54,6 +56,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Public Routes */}
+        <Route path="/landing" element={<PublicRoute><Landing /></PublicRoute>} />
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
 
@@ -71,7 +74,7 @@ function App() {
         </Route>
 
         {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/landing" replace />} />
       </Routes>
     </BrowserRouter>
   );

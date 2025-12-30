@@ -91,7 +91,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         ('LINEBELOW', (0, -1), (-1, -1), 0.5, GREEN),
     ]))
     story.append(t)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 25))
     
     # Summary
     ai_findings = []
@@ -114,7 +114,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
     ]))
     story.append(summary_box)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 25))
     
     # AI Findings Table (with proper text wrapping)
     if use_ai and ai_findings:
@@ -158,7 +158,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         
         ft.setStyle(TableStyle(style_list))
         story.append(ft)
-        story.append(Spacer(1, 10))
+        story.append(Spacer(1, 25))
     
     # Chart
     try:
@@ -167,7 +167,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         chart.hAlign = 'CENTER'
         story.append(Paragraph("STATISTICS", styles['SHeading']))
         story.append(chart)
-        story.append(Spacer(1, 8))
+        story.append(Spacer(1, 20))
     except:
         pass
 
@@ -183,7 +183,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         ], colWidths=[80, 400])
         wt.setStyle(simple_table_style())
         story.append(wt)
-        story.append(Spacer(1, 8))
+        story.append(Spacer(1, 20))
 
     # Ports - Split into chunks if too many
     if 'port' in results:
@@ -207,7 +207,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
                 story.append(pt)
                 if chunk_start + 12 < min(len(ports), 24):
                     story.append(Spacer(1, 4))
-            story.append(Spacer(1, 8))
+            story.append(Spacer(1, 20))
 
     # Subdomains - Split into chunks
     if 'subdo' in results:
@@ -232,7 +232,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
             
             if len(subs) > 60:
                 story.append(Paragraph(f"... and {len(subs) - 60} more subdomains", styles['SSmall']))
-            story.append(Spacer(1, 8))
+            story.append(Spacer(1, 20))
 
     # Tech
     if 'tech' in results or 'cms' in results:
@@ -248,7 +248,7 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
             tt = Table(td, colWidths=[70, 410])
             tt.setStyle(simple_table_style(header=True))
             story.append(tt)
-        story.append(Spacer(1, 8))
+        story.append(Spacer(1, 20))
 
     # Directories
     if 'dir' in results:
@@ -275,10 +275,10 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
             
             if len(dirs) > 30:
                 story.append(Paragraph(f"... and {len(dirs) - 30} more directories", styles['SSmall']))
-            story.append(Spacer(1, 8))
+            story.append(Spacer(1, 20))
 
     # Footer
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 30))
     story.append(HRFlowable(width="100%", thickness=0.5, color=GREEN))
     story.append(Paragraph(f"S1C0N | {datetime.now().strftime('%Y')}", styles['SSmall']))
 
