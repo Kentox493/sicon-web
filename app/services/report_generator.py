@@ -1,12 +1,12 @@
 """
-PDF Report Generator Service - Dark Theme
+PDF Report Generator Service - Neon Dark Theme
 
-Generates beautiful dark-themed PDF reports from scan data.
+Generates professional, high-contrast dark-themed PDF reports from scan data.
 Features:
-- S1C0N Design System (Black & WhatsApp Green)
-- Custom Logo Integration
-- Structured Data Tables
-- Security Summaries
+- S1C0N Neon Design System (Black & Bright Neon Green)
+- Default Size Logo (Esthetic)
+- Tabular Data Layouts
+- Professional Typography
 """
 
 import os
@@ -19,263 +19,269 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, Image, PageBreak
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from reportlab.pdfgen import canvas
 
-# S1C0N Color Palette
-SICON_BLACK = colors.Color(0/255, 0/255, 0/255)
-SICON_BG_BLACK = colors.Color(5/255, 5/255, 5/255)  # Slightly lighter for contrast if needed, but keeping pure black request
-SICON_GREEN = colors.Color(37/255, 211/255, 102/255)
-SICON_DARK_GREEN = colors.Color(12/255, 26/255, 16/255)
-SICON_GRAY = colors.Color(156/255, 163/255, 175/255)
-SICON_WHITE = colors.Color(255/255, 255/255, 255/255)
-SICON_LIGHT_GRAY = colors.Color(229/255, 231/255, 235/255)
+# S1C0N Neon Palette
+NEON_BLACK = colors.Color(0/255, 0/255, 0/255)         # Pure Black
+NEON_GREEN = colors.Color(37/255, 211/255, 102/255)    # WhatsApp Green (Bright)
+NEON_GLOW = colors.Color(37/255, 211/255, 102/255, alpha=0.3) # Transparent Green for glow effects
+NEON_DARK_GREEN = colors.Color(6/255, 30/255, 15/255)  # Very dark green for row bands
+NEON_WHITE = colors.Color(240/255, 255/255, 240/255)   # Off-white with green tint
+NEON_GRAY = colors.Color(100/255, 100/255, 100/255)    # Dark Gray
 
 # Path configuration
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LOGO_PATH = os.path.join(BASE_DIR, "web", "src", "assets", "logo.png")
 
 def add_background(canvas, doc):
-    """Draws the dark background on every page."""
+    """Draws the dark background on every page with neon borders."""
     canvas.saveState()
-    canvas.setFillColor(SICON_BLACK)
+    # Fill Background
+    canvas.setFillColor(NEON_BLACK)
     canvas.rect(0, 0, A4[0], A4[1], fill=1)
     
-    # Add subtle green border line at top
-    canvas.setStrokeColor(SICON_GREEN)
-    canvas.setLineWidth(2)
-    canvas.line(0, A4[1] - 5, A4[0], A4[1] - 5)
+    # Neon Border
+    canvas.setStrokeColor(NEON_GREEN)
+    canvas.setLineWidth(1)
+    margin = 10 * mm
+    canvas.rect(margin, margin, A4[0] - 2*margin, A4[1] - 2*margin)
     
-    # Add footer watermarks or similar if needed
+    # Corner Accents (Cyberpunk/Neon style)
+    corner_len = 10 * mm
+    canvas.setLineWidth(3)
+    
+    # Top Left
+    canvas.line(margin, A4[1]-margin, margin + corner_len, A4[1]-margin)
+    canvas.line(margin, A4[1]-margin, margin, A4[1]-margin - corner_len)
+    
+    # Top Right
+    canvas.line(A4[0]-margin, A4[1]-margin, A4[0]-margin - corner_len, A4[1]-margin)
+    canvas.line(A4[0]-margin, A4[1]-margin, A4[0]-margin, A4[1]-margin - corner_len)
+    
+    # Bottom Left
+    canvas.line(margin, margin, margin + corner_len, margin)
+    canvas.line(margin, margin, margin, margin + corner_len)
+    
+    # Bottom Right
+    canvas.line(A4[0]-margin, margin, A4[0]-margin - corner_len, margin)
+    canvas.line(A4[0]-margin, margin, A4[0]-margin, margin + corner_len)
+    
     canvas.restoreState()
 
 def create_styles():
-    """Create custom dark-theme paragraph styles."""
+    """Create custom neon dark-theme styles."""
     styles = getSampleStyleSheet()
     
     styles.add(ParagraphStyle(
-        name='SiconTitle',
+        name='NeonTitle',
         parent=styles['Title'],
+        fontName='Helvetica-Bold',
         fontSize=24,
-        textColor=SICON_WHITE,
+        textColor=NEON_WHITE,
         spaceAfter=10,
         alignment=TA_CENTER,
     ))
     
     styles.add(ParagraphStyle(
-        name='SiconSubtitle',
+        name='NeonSubtitle',
         parent=styles['Heading2'],
+        fontName='Helvetica',
         fontSize=14,
-        textColor=SICON_GREEN,
-        spaceAfter=20,
+        textColor=NEON_GREEN,
+        spaceAfter=25,
         alignment=TA_CENTER,
+        leading=18,
     ))
     
     styles.add(ParagraphStyle(
-        name='SiconHeading',
+        name='NeonHeading',
         parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
         fontSize=16,
-        textColor=SICON_GREEN,
-        spaceBefore=15,
-        spaceAfter=10,
+        textColor=NEON_GREEN,
+        spaceBefore=20,
+        spaceAfter=15,
+        borderPadding=5,
+        borderWidth=0,
+        borderColor=NEON_GREEN,
+        borderRadius=2,
     ))
     
     styles.add(ParagraphStyle(
-        name='SiconBody',
+        name='NeonBody',
         parent=styles['Normal'],
+        fontName='Courier',
         fontSize=10,
-        textColor=SICON_LIGHT_GRAY,
-        spaceAfter=6,
+        textColor=NEON_WHITE,
         leading=14,
+        spaceAfter=8,
     ))
     
     styles.add(ParagraphStyle(
-        name='SiconSmall',
+        name='NeonSmall',
         parent=styles['Normal'],
+        fontName='Courier',
         fontSize=8,
-        textColor=SICON_GRAY,
-    ))
-    
-    styles.add(ParagraphStyle(
-        name='SiconHighlight',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=SICON_GREEN,
-        backColor=SICON_DARK_GREEN,
+        textColor=NEON_GRAY,
+        alignment=TA_CENTER,
     ))
     
     return styles
 
 def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any]) -> bytes:
-    """Generate PDF report."""
+    """Generate Neon PDF report."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=20*mm,
-        leftMargin=20*mm,
-        topMargin=20*mm,
-        bottomMargin=20*mm
+        rightMargin=25*mm,
+        leftMargin=25*mm,
+        topMargin=25*mm,
+        bottomMargin=25*mm
     )
     
     styles = create_styles()
     story = []
     
-    # --- HEADER ---
+    # --- LOGO & HEADER ---
     try:
         if os.path.exists(LOGO_PATH):
-            # Resize logic for logo
-            img = Image(LOGO_PATH, width=1.5*inch, height=1.5*inch)
+            # Use a reasonable default size, not too small
+            # ~3 inches wide usually looks good on A4
+            img = Image(LOGO_PATH, width=3*inch, height=1.5*inch, kind='proportional')
             img.hAlign = 'CENTER'
             story.append(img)
-            story.append(Spacer(1, 10))
+            story.append(Spacer(1, 15))
         else:
-            story.append(Paragraph("S1C0N", styles['SiconTitle']))
+            story.append(Paragraph("S1C0N", styles['NeonTitle']))
     except Exception:
-        story.append(Paragraph("S1C0N", styles['SiconTitle']))
+        story.append(Paragraph("S1C0N", styles['NeonTitle']))
 
-    story.append(Paragraph("SECURITY ASSESSMENT REPORT", styles['SiconSubtitle']))
-    story.append(HRFlowable(width="100%", thickness=1, color=SICON_GREEN, spaceBefore=5, spaceAfter=20))
+    story.append(Paragraph("CYBER RECONNAISSANCE REPORT", styles['NeonSubtitle']))
     
-    # --- SCAN INFO ---
+    # --- SCAN PROPERTIES ---
     info_data = [
-        ["TARGET", scan_data.get('target', 'N/A')],
-        ["SCAN ID", f"#{scan_data.get('id', 'N/A')}"],
-        ["DATE", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-        ["CLIENT", user_data.get('username', 'Unknown')],
+        ["TARGET ASSET", scan_data.get('target', 'N/A').upper()],
+        ["SCAN REFERENCE", f"#{scan_data.get('id', 'N/A')}"],
+        ["EXECUTION TIME", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+        ["OPERATOR", user_data.get('username', 'Unknown').upper()],
     ]
     
-    info_table = Table(info_data, colWidths=[100, 350])
+    info_table = Table(info_data, colWidths=[150, 300])
     info_table.setStyle(TableStyle([
-        ('TEXTCOLOR', (0, 0), (0, -1), SICON_GREEN),
-        ('TEXTCOLOR', (1, 0), (1, -1), SICON_WHITE),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (0, 0), (0, -1), NEON_GREEN),
+        ('TEXTCOLOR', (1, 0), (1, -1), NEON_WHITE),
+        ('FONTNAME', (0, 0), (-1, -1), 'Courier-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('LINEBELOW', (0, 0), (-1, -1), 0.5, NEON_GREEN), # Green dividers
     ]))
     story.append(info_table)
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 25))
     
-    # --- EXECUTIVE SUMMARY ---
-    story.append(Paragraph("EXECUTIVE SUMMARY", styles['SiconHeading']))
+    # --- EXECUTIVE SUMMARY BOX ---
+    story.append(Paragraph("EXECUTIVE SUMMARY", styles['NeonHeading']))
     results = scan_data.get('results', {})
     summary = generate_summary(results)
     
-    # Create a highlighted box for summary
-    story.append(Table(
-        [[Paragraph(summary, styles['SiconBody'])]],
+    summary_table = Table(
+        [[Paragraph(summary, styles['NeonBody'])]],
         colWidths=[450],
         style=TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), SICON_DARK_GREEN),
-            ('BOX', (0, 0), (-1, -1), 1, SICON_GREEN),
+            ('BACKGROUND', (0, 0), (-1, -1), NEON_DARK_GREEN), # Dark green fill
+            ('BOX', (0, 0), (-1, -1), 1, NEON_GREEN),         # Neon border
             ('LEFTPADDING', (0, 0), (-1, -1), 15),
             ('RIGHTPADDING', (0, 0), (-1, -1), 15),
             ('TOPPADDING', (0, 0), (-1, -1), 15),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
         ])
-    ))
-    story.append(Spacer(1, 20))
+    )
+    story.append(summary_table)
+    story.append(Spacer(1, 25))
     
-    # --- RESULTS MODULES ---
-    
+    # --- FINDINGS ---
+
     # 1. WAF
     if 'waf' in results:
-        story.append(Paragraph("WAF DETECTION", styles['SiconHeading']))
+        story.append(Paragraph("WAF PROTECTION", styles['NeonHeading']))
         waf = results['waf']
         detected = waf.get('detected', False)
         
         waf_status = [
-            ["Protection Status", "DETECTED" if detected else "NOT DETECTED"],
-            ["WAF Name", waf.get('waf_name', 'None') or 'N/A'],
-            ["Vendor", waf.get('waf_vendor', 'N/A') or 'N/A']
+            ["STATUS", "DETECTED" if detected else "NOT DETECTED"],
+            ["WAF NAME", (waf.get('waf_name', 'None') or 'N/A').upper()],
+            ["VENDOR", (waf.get('waf_vendor', 'N/A') or 'N/A').upper()]
         ]
         
         t = Table(waf_status, colWidths=[150, 300])
-        t.setStyle(get_dark_table_style(highlight_row=0 if detected else None))
+        t.setStyle(get_neon_table_style())
         story.append(t)
-        story.append(Spacer(1, 15))
+        story.append(Spacer(1, 20))
 
     # 2. PORTS
     if 'port' in results:
-        story.append(Paragraph("OPEN PORTS & SERVICES", styles['SiconHeading']))
+        story.append(Paragraph("OPEN PORTS", styles['NeonHeading']))
         port_data = results['port']
         ports = port_data.get('open_ports', [])
         
         if ports:
-            # Header
-            data = [["PORT", "PROTOCOL", "SERVICE", "VERSION", "RISK"]]
+            # Table Header
+            data = [["PORT", "PROTO", "SERVICE", "VERSION", "RISK"]]
             # Rows
             for p in ports:
                 data.append([
                     str(p.get('port')),
                     p.get('protocol', 'tcp'),
                     p.get('service', 'unknown'),
-                    p.get('version', '')[:25],
+                    p.get('version', '')[:20],
                     p.get('risk', 'low').upper()
                 ])
             
-            t = Table(data, colWidths=[50, 60, 80, 180, 80])
-            t.setStyle(get_dark_table_style(header=True))
+            t = Table(data, colWidths=[50, 50, 80, 190, 80])
+            t.setStyle(get_neon_table_style(header=True))
             story.append(t)
-            
-            # Risk legend
-            story.append(Spacer(1, 5))
-            if any(p.get('risk') == 'high' for p in ports):
-                story.append(Paragraph("⚠️ High risk ports detected! Immediate attention recommended.", 
-                                    ParagraphStyle('Warning', parent=styles['SiconBody'], textColor=colors.red)))
         else:
-            story.append(Paragraph("No open ports found.", styles['SiconBody']))
-        story.append(Spacer(1, 15))
+            story.append(Paragraph("\u2714 No open ports detected.", styles['NeonBody']))
+        story.append(Spacer(1, 20))
 
-    # 3. SUBDOMAINS - IMPROVED LAYOUT
+    # 3. SUBDOMAINS - TABLE LAYOUT
     if 'subdo' in results:
-        story.append(Paragraph("SUBDOMAIN ENUMERATION", styles['SiconHeading']))
+        story.append(Paragraph("SUBDOMAINS", styles['NeonHeading']))
         subdo = results['subdo']
         subdomains = subdo.get('subdomains', [])
         count = subdo.get('count', 0)
         
-        story.append(Paragraph(f"Total Found: {count}", styles['SiconBody']))
+        story.append(Paragraph(f"Discoveries: {count}", styles['NeonBody']))
         story.append(Spacer(1, 5))
         
         if subdomains:
-            # Format subdomains into a 2-column grid for better readability
-            # Filter just the names
-            names = [s.get('subdomain', s) if isinstance(s, dict) else s for s in subdomains]
+            # Create a clean table for subdomains instead of a massive grid
+            # Columns: #, Subdomain, Type
+            data = [["#", "SUBDOMAIN", "TYPE"]]
             
-            # Chunk into pairs
-            rows = []
-            for i in range(0, len(names), 2):
-                c1 = names[i]
-                c2 = names[i+1] if i+1 < len(names) else ""
-                rows.append([c1, c2])
+            for i, s in enumerate(subdomains[:60]): # Limit to first 60 to prevent PDF overflow issues
+                name = s.get('subdomain', s) if isinstance(s, dict) else s
+                stype = s.get('type', 'regular') if isinstance(s, dict) else 'regular'
+                data.append([str(i+1), name, stype.upper()])
             
-            # Limit rows to avoid huge report
-            if len(rows) > 50:
-                rows = rows[:50]
-                rows.append(["...", "..."])
-            
-            t = Table(rows, colWidths=[225, 225])
-            t.setStyle(TableStyle([
-                ('TEXTCOLOR', (0, 0), (-1, -1), SICON_LIGHT_GRAY),
-                ('FONTNAME', (0, 0), (-1, -1), 'Courier'),
-                ('FONTSIZE', (0, 0), (-1, -1), 9),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-                ('TOPPADDING', (0, 0), (-1, -1), 2),
-                ('GRID', (0, 0), (-1, -1), 0.25, SICON_DARK_GREEN), # Subtle grid
-                ('BACKGROUND', (0, 0), (-1, -1), colors.Color(0.1, 0.1, 0.1)), # Slightly lighter than black
-            ]))
+            if len(subdomains) > 60:
+                data.append(["...", f"... and {len(subdomains)-60} more", "..."])
+
+            t = Table(data, colWidths=[40, 310, 100])
+            t.setStyle(get_neon_table_style(header=True))
             story.append(t)
         else:
-            story.append(Paragraph("No subdomains found.", styles['SiconBody']))
-        story.append(Spacer(1, 15))
+            story.append(Paragraph("\u2716 No subdomains found.", styles['NeonBody']))
+        story.append(Spacer(1, 20))
 
-    # 4. CMS & TECH
+    # 4. TECH STACK
     if 'cms' in results or 'tech' in results:
-        story.append(Paragraph("TECHNOLOGY STACK", styles['SiconHeading']))
+        story.append(Paragraph("TECHNOLOGIES", styles['NeonHeading']))
         
-        tech_data = []
+        tech_data = [["CATEGORY", "TECHNOLOGY"]]
         
         # CMS
         if 'cms' in results:
@@ -288,82 +294,70 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any]) -
             tech = results['tech']
             for t in tech.get('technologies', []):
                 name = t.get('name', t) if isinstance(t, dict) else t
-                cat = t.get('category', 'Technology') if isinstance(t, dict) else 'Technology'
-                tech_data.append([cat.replace('_', ' ').title(), name])
+                cat = t.get('category', 'General') if isinstance(t, dict) else 'General'
+                tech_data.append([cat.replace('_', ' ').upper(), name])
         
-        if tech_data:
+        if len(tech_data) > 1:
             t = Table(tech_data, colWidths=[150, 300])
-            t.setStyle(get_dark_table_style())
+            t.setStyle(get_neon_table_style(header=True))
             story.append(t)
         else:
-             story.append(Paragraph("No specific technologies identified.", styles['SiconBody']))
+             story.append(Paragraph("No technologies identified.", styles['NeonBody']))
 
     # 5. DIRECTORIES
     if 'dir' in results:
-        story.append(Paragraph("DIRECTORY SCAN", styles['SiconHeading']))
+        story.append(Paragraph("DIRECTORIES", styles['NeonHeading']))
         dir_data = results['dir']
         dirs = dir_data.get('directories', [])
         
         if dirs:
-            data = [["STATUS", "PATH", "SEVERITY"]]
-            for d in dirs[:20]: # Limit for brevity
-                status_code = d.get('status', 0)
-                # Colorize status text
-                s_text = str(status_code)
-                severity = d.get('severity', 'info')
-                
-                data.append([s_text, d.get('path'), severity.upper()])
+            data = [["CODE", "PATH", "SEVERITY"]]
+            for d in dirs[:25]: # Limit
+                status_code = str(d.get('status', 0))
+                severity = d.get('severity', 'info').upper()
+                data.append([status_code, d.get('path'), severity])
             
-            t = Table(data, colWidths=[60, 300, 90])
-            t.setStyle(get_dark_table_style(header=True))
+            t = Table(data, colWidths=[50, 300, 100])
+            t.setStyle(get_neon_table_style(header=True))
             story.append(t)
         else:
-            story.append(Paragraph("No interesting directories found.", styles['SiconBody']))
+            story.append(Paragraph("No accessible directories.", styles['NeonBody']))
 
     # Footer
-    story.append(Spacer(1, 30))
-    story.append(HRFlowable(width="100%", thickness=1, color=SICON_GREEN))
-    story.append(Paragraph("CONFIDENTIAL - Generated by S1C0N", styles['SiconSmall']))
+    story.append(Spacer(1, 40))
+    story.append(HRFlowable(width="100%", thickness=1, color=NEON_GREEN))
+    story.append(Paragraph(f"S1C0N RECONNAISSANCE PLATFORM | {datetime.now().strftime('%Y')}", styles['NeonSmall']))
 
-    # Build with background
+    # Build PDF
     doc.build(story, onFirstPage=add_background, onLaterPages=add_background)
     buffer.seek(0)
     return buffer.getvalue()
 
 
-def get_dark_table_style(header=False, highlight_row=None):
-    """Common table style for dark theme."""
+def get_neon_table_style(header=False):
+    """Neon table style."""
     style = [
-        ('TEXTCOLOR', (0, 0), (-1, -1), SICON_LIGHT_GRAY),
-        ('GRID', (0, 0), (-1, -1), 0.5, SICON_GREEN),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('TEXTCOLOR', (0, 0), (-1, -1), NEON_WHITE),
+        ('GRID', (0, 0), (-1, -1), 0.5, NEON_GREEN),
+        ('FONTNAME', (0, 0), (-1, -1), 'Courier'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BACKGROUND', (0, 0), (-1, -1), colors.Color(0.05, 0.05, 0.05)), # Very dark grey
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BACKGROUND', (0, 0), (-1, -1), NEON_BLACK),
     ]
     
     if header:
         style.extend([
-            ('BACKGROUND', (0, 0), (-1, 0), SICON_GREEN), # Header row
-            ('TEXTCOLOR', (0, 0), (-1, 0), SICON_BLACK),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BACKGROUND', (0, 0), (-1, 0), NEON_GREEN), # Header Row
+            ('TEXTCOLOR', (0, 0), (-1, 0), NEON_BLACK),
+            ('FONTNAME', (0, 0), (-1, 0), 'Courier-Bold'),
         ])
-    
-    if highlight_row is not None:
-         style.extend([
-            ('TEXTCOLOR', (1, highlight_row), (1, highlight_row), SICON_GREEN),
-            ('FONTNAME', (1, highlight_row), (1, highlight_row), 'Helvetica-Bold'),
-        ])
-
+        
     return TableStyle(style)
 
 def generate_summary(results: Dict[str, Any]) -> str:
-    """Generate executive summary."""
+    """Generate professional executive summary."""
     parts = []
-    
-    # High level risk assessment
-    risks = 0
     
     # Check WAF
     waf = results.get('waf', {})
@@ -371,7 +365,6 @@ def generate_summary(results: Dict[str, Any]) -> str:
         parts.append(f"Target is protected by {waf.get('waf_name', 'WAF')}.")
     else:
         parts.append("Target appears UNPROTECTED (No WAF detected).")
-        risks += 1
     
     # Check Ports
     port = results.get('port', {})
@@ -379,24 +372,12 @@ def generate_summary(results: Dict[str, Any]) -> str:
     high_risk_ports = [p for p in open_ports if p.get('risk') == 'high']
     if high_risk_ports:
         parts.append(f"CRITICAL: Found {len(high_risk_ports)} high-risk open ports.")
-        risks += 2
     else:
-        parts.append(f"Found {len(open_ports)} open ports.")
+        parts.append(f"Confirmed {len(open_ports)} exposed services.")
         
     # Check Subdomains
     subdo = results.get('subdo', {})
-    parts.append(f"Enumerated {subdo.get('count', 0)} subdomains.")
-    
-    # CMS
-    cms = results.get('cms', {})
-    if cms.get('detected'):
-        parts.append(f"Running {cms.get('cms_name')}.")
-        
-    if risks >= 2:
-        parts.append("OVERALL STATUS: HIGH RISK TARGET.")
-    elif risks == 1:
-        parts.append("OVERALL STATUS: MODERATE RISK.")
-    else:
-        parts.append("OVERALL STATUS: LOW RISK OBSERVED.")
+    count = subdo.get('count', 0)
+    parts.append(f"Mapped {count} subdomains.")
         
     return " ".join(parts)
