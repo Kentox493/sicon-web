@@ -3,16 +3,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import json
 
-from app.core.config import settings
+from app.core.config import settings as app_settings
 from app.core.database import engine, Base
-from app.routers import auth, scans, reports, settings
+from app.routers import auth, scans, reports
+from app.routers import settings as settings_router
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title=settings.APP_NAME,
+    title=app_settings.APP_NAME,
     description="S1C0N Security Reconnaissance Platform API",
     version="1.0.0",
     docs_url="/docs",
@@ -22,7 +23,7 @@ app = FastAPI(
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[app_settings.FRONTEND_URL, "http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,7 +33,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(scans.router)
 app.include_router(reports.router)
-app.include_router(settings.router)
+app.include_router(settings_router.router)
 
 # WebSocket connection manager
 class ConnectionManager:
