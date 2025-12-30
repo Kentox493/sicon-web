@@ -1,7 +1,7 @@
 """
-Scanner Service Module - Real Tool Execution
+Scanner Service Module - Real Tool Execution with Clean Output Parsing
 
-This module executes real security scanning tools with proper security validation.
+This module executes real security scanning tools and returns clean, structured JSON output.
 Includes LFI protection and input sanitization.
 """
 
@@ -10,12 +10,17 @@ import re
 import json
 import os
 import tempfile
-import shutil
+import time
+import requests
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from urllib.parse import urlparse
 from app.core.database import SessionLocal
 from app.models.scan import Scan
+
+# Disable SSL warnings for scanning
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # =============================================================================
 # SECURITY: Input Validation & Sanitization
@@ -29,7 +34,6 @@ def validate_target(target: str) -> str:
     if not target:
         raise ValueError("Target cannot be empty")
     
-    # Remove any protocol prefix for domain extraction
     target = target.strip()
     
     # Parse URL to extract domain
@@ -43,62 +47,42 @@ def validate_target(target: str) -> str:
     if ':' in domain:
         domain = domain.split(':')[0]
     
-    # Security: Block dangerous patterns (LFI, Command Injection)
+    # Security: Block dangerous patterns
     dangerous_patterns = [
-        r'\.\./',           # Directory traversal
-        r'\.\.',            # Parent directory
-        r';',               # Command separator
-        r'\|',              # Pipe
-        r'&',               # Command chaining
-        r'\$',              # Variable expansion
-        r'`',               # Command substitution
-        r'\n',              # Newline
-        r'\r',              # Carriage return
-        r'<',               # Redirect
-        r'>',               # Redirect
-        r'\x00',            # Null byte
-        r'/etc/',           # Linux system paths
-        r'/var/',
-        r'/tmp/',
-        r'/proc/',
-        r'c:\\',            # Windows paths (case insensitive)
-        r'file://',         # File protocol
+        r'\.\.\/', r'\.\.', r';', r'\|', r'&', r'\$', r'`', r'\n', r'\r',
+        r'<', r'>', r'\x00', r'/etc/', r'/var/', r'/tmp/', r'/proc/',
+        r'c:\\', r'file://',
     ]
     
     for pattern in dangerous_patterns:
         if re.search(pattern, domain, re.IGNORECASE):
             raise ValueError(f"Invalid target: contains dangerous pattern")
     
-    # Validate domain format (alphanumeric, dots, hyphens only)
+    # Validate domain format
     domain_pattern = r'^[a-zA-Z0-9][a-zA-Z0-9\-\.]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$'
-    if not re.match(domain_pattern, domain):
-        # Check if it's an IP address
-        ip_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
-        if not re.match(ip_pattern, domain):
-            raise ValueError(f"Invalid target format: {domain}")
+    ip_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+    
+    if not re.match(domain_pattern, domain) and not re.match(ip_pattern, domain):
+        raise ValueError(f"Invalid target format: {domain}")
     
     return domain
 
 def sanitize_command_arg(arg: str) -> str:
-    """Sanitize a single command argument."""
-    # Remove dangerous characters
+    """Sanitize command argument."""
     return re.sub(r'[;&|`$<>\n\r\x00]', '', arg)
 
 # =============================================================================
-# SCANNING FUNCTIONS
+# MAIN SCAN TASK
 # =============================================================================
 
 def run_scan_task(scan_id: int, options: Dict[str, Any]):
-    """
-    Background task to run the scan with real tools.
-    """
+    """Background task to run the scan with real tools."""
     db = SessionLocal()
     try:
         scan = db.query(Scan).filter(Scan.id == scan_id).first()
         if not scan:
             return
         
-        # Validate target
         try:
             target = validate_target(scan.target)
         except ValueError as e:
@@ -159,11 +143,11 @@ def run_scan_task(scan_id: int, options: Dict[str, Any]):
         db.close()
 
 def run_module(module: str, target: str, options: Dict[str, Any]) -> Dict[str, Any]:
-    """Run a specific scan module and return results."""
+    """Run a specific scan module."""
     proxy = options.get("proxy")
     user_agent = options.get("user_agent")
     
-    module_handlers = {
+    handlers = {
         "waf": run_waf_scan,
         "port": run_port_scan,
         "subdo": run_subdomain_scan,
@@ -173,243 +157,304 @@ def run_module(module: str, target: str, options: Dict[str, Any]) -> Dict[str, A
         "wp": run_wp_enum,
     }
     
-    handler = module_handlers.get(module)
+    handler = handlers.get(module)
     if handler:
         return handler(target, proxy, user_agent)
     
     return {"status": "unknown_module"}
 
 # =============================================================================
-# WAF DETECTION
+# WAF DETECTION - Clean Output
 # =============================================================================
 
 def run_waf_scan(target: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Dict[str, Any]:
-    """Run WAF detection using wafw00f."""
+    """Run WAF detection using wafw00f with clean parsed output."""
+    result = {
+        "detected": False,
+        "waf_name": None,
+        "waf_vendor": None,
+        "target": target,
+        "status": "completed"
+    }
+    
     try:
-        # First get the proper URL using httprobe equivalent
-        try:
-            probe_result = subprocess.run(
-                ["httprobe"],
-                input=target,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            host = probe_result.stdout.strip() or f"https://{target}"
-        except:
-            host = f"https://{target}"
+        # Try HTTPS first
+        host = f"https://{target}"
         
-        # Run wafw00f
-        cmd = ["wafw00f", host]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        output = result.stdout
+        cmd = ["wafw00f", host, "-o", "-"]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        output = proc.stdout + proc.stderr
         
+        # Parse output
         if "is behind" in output:
-            match = re.search(r'is behind\s(.+?)\s\(', output)
+            # Extract: "The site https://example.com is behind Cloudflare (Cloudflare Inc.)"
+            match = re.search(r'is behind\s+(.+?)\s*(?:\(([^)]+)\))?(?:\s|$)', output)
             if match:
-                waf_name = match.group(1).strip()
-                return {
-                    "detected": True,
-                    "waf_name": waf_name,
-                    "target": host,
-                    "raw_output": output[:500]
-                }
+                result["detected"] = True
+                result["waf_name"] = match.group(1).strip()
+                result["waf_vendor"] = match.group(2).strip() if match.group(2) else None
+        elif "No WAF" in output or "seems to be unprotected" in output:
+            result["detected"] = False
+            result["waf_name"] = "None"
         
-        return {
-            "detected": False,
-            "waf_name": None,
-            "target": host,
-            "raw_output": output[:500]
-        }
+        result["target"] = host
         
     except subprocess.TimeoutExpired:
-        return {"error": "Timeout", "detected": False}
+        result["status"] = "timeout"
+        result["error"] = "Scan timed out after 60 seconds"
     except FileNotFoundError:
-        return {"error": "wafw00f not installed", "detected": False}
+        result["status"] = "error"
+        result["error"] = "wafw00f not installed. Run: sudo apt install wafw00f"
     except Exception as e:
-        return {"error": str(e), "detected": False}
+        result["status"] = "error"
+        result["error"] = str(e)
+    
+    return result
 
 # =============================================================================
-# PORT SCANNING
+# PORT SCANNING - Clean Output
 # =============================================================================
 
 def run_port_scan(target: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Dict[str, Any]:
-    """Run port scan using nmap."""
+    """Run port scan using nmap with clean parsed output."""
+    result = {
+        "open_ports": [],
+        "count": 0,
+        "target": target,
+        "status": "completed",
+        "scan_type": "Top 100 Ports (Fast Scan)"
+    }
+    
     try:
-        # Run nmap with service version detection
-        cmd = ["nmap", "-sV", "-F", target]  # -F for fast scan (top 100 ports)
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        output = result.stdout
+        cmd = ["nmap", "-sV", "-F", "--open", target]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        output = proc.stdout
         
-        # Parse nmap output
-        open_ports = []
+        # Parse nmap output line by line
         for line in output.split('\n'):
-            if '/tcp' in line and 'open' in line:
-                parts = line.split()
-                if len(parts) >= 3:
-                    port_proto = parts[0]  # e.g., "80/tcp"
-                    port = int(port_proto.split('/')[0])
-                    state = parts[1]
-                    service = parts[2] if len(parts) > 2 else "unknown"
-                    version = ' '.join(parts[3:]) if len(parts) > 3 else ""
-                    
-                    open_ports.append({
-                        "port": port,
-                        "state": state,
-                        "service": service,
-                        "version": version
-                    })
+            # Match lines like: 22/tcp   open  ssh     OpenSSH 8.2p1 Ubuntu
+            match = re.match(r'(\d+)/(\w+)\s+open\s+(\S+)\s*(.*)', line)
+            if match:
+                port_num = int(match.group(1))
+                protocol = match.group(2)
+                service = match.group(3)
+                version = match.group(4).strip() if match.group(4) else ""
+                
+                # Determine risk level based on common vulnerable ports
+                risk = "low"
+                if port_num in [21, 23, 3389, 5900]:  # FTP, Telnet, RDP, VNC
+                    risk = "high"
+                elif port_num in [22, 25, 110, 143, 3306, 5432]:  # SSH, SMTP, POP3, IMAP, MySQL, PostgreSQL
+                    risk = "medium"
+                
+                result["open_ports"].append({
+                    "port": port_num,
+                    "protocol": protocol,
+                    "state": "open",
+                    "service": service,
+                    "version": version,
+                    "risk": risk
+                })
         
-        return {
-            "open_ports": open_ports,
-            "count": len(open_ports),
-            "raw_output": output[:1000]
-        }
+        result["count"] = len(result["open_ports"])
         
     except subprocess.TimeoutExpired:
-        return {"error": "Timeout", "open_ports": []}
+        result["status"] = "timeout"
+        result["error"] = "Scan timed out after 5 minutes"
     except FileNotFoundError:
-        return {"error": "nmap not installed", "open_ports": []}
+        result["status"] = "error"
+        result["error"] = "nmap not installed. Run: sudo apt install nmap"
     except Exception as e:
-        return {"error": str(e), "open_ports": []}
+        result["status"] = "error"
+        result["error"] = str(e)
+    
+    return result
 
 # =============================================================================
-# SUBDOMAIN ENUMERATION
+# SUBDOMAIN ENUMERATION - Clean Output
 # =============================================================================
 
 def run_subdomain_scan(target: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Dict[str, Any]:
-    """Run subdomain enumeration using subfinder, sublist3r, assetfinder."""
-    subdomains = set()
+    """Run subdomain enumeration with clean parsed output."""
+    result = {
+        "subdomains": [],
+        "count": 0,
+        "sources": [],
+        "target": target,
+        "status": "completed"
+    }
     
+    all_subdomains = set()
+    
+    # Run subfinder
     try:
-        # Run subfinder
-        try:
-            result = subprocess.run(
-                ["subfinder", "-d", target, "-silent"],
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
-            for line in result.stdout.strip().split('\n'):
-                if line.strip():
-                    subdomains.add(line.strip())
-        except:
-            pass
-        
-        # Run sublist3r
-        try:
-            result = subprocess.run(
-                ["sublist3r", "-d", target, "-o", "/dev/stdout"],
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
-            for line in result.stdout.strip().split('\n'):
-                if line.strip() and not line.startswith('['):
-                    subdomains.add(line.strip())
-        except:
-            pass
-        
-        # Run assetfinder
-        try:
-            result = subprocess.run(
-                ["assetfinder", "--subs-only", target],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            for line in result.stdout.strip().split('\n'):
-                if line.strip():
-                    subdomains.add(line.strip())
-        except:
-            pass
-        
-        # Separate cPanel subdomains from regular ones
-        cpanel_prefixes = ("cpanel.", "webdisk.", "webmail.", "cpcontacts.", "whm.", "autoconfig.", "mail.", "cpcalendars.", "autodiscover.")
-        cpanel_subdomains = [s for s in subdomains if s.startswith(cpanel_prefixes)]
-        regular_subdomains = [s for s in subdomains if not s.startswith(cpanel_prefixes)]
-        
-        return {
-            "count": len(subdomains),
-            "subdomains": list(regular_subdomains)[:100],  # Limit to 100
-            "cpanel_subdomains": cpanel_subdomains[:50],
-            "total_found": len(subdomains)
-        }
-        
-    except Exception as e:
-        return {"error": str(e), "subdomains": [], "count": 0}
+        proc = subprocess.run(
+            ["subfinder", "-d", target, "-silent"],
+            capture_output=True, text=True, timeout=120
+        )
+        for line in proc.stdout.strip().split('\n'):
+            if line.strip() and '.' in line:
+                all_subdomains.add(line.strip().lower())
+        if proc.returncode == 0:
+            result["sources"].append("subfinder")
+    except:
+        pass
+    
+    # Run assetfinder
+    try:
+        proc = subprocess.run(
+            ["assetfinder", "--subs-only", target],
+            capture_output=True, text=True, timeout=60
+        )
+        for line in proc.stdout.strip().split('\n'):
+            if line.strip() and '.' in line:
+                all_subdomains.add(line.strip().lower())
+        if proc.returncode == 0:
+            result["sources"].append("assetfinder")
+    except:
+        pass
+    
+    # Categorize subdomains
+    cpanel_prefixes = ("cpanel.", "webdisk.", "webmail.", "cpcontacts.", "whm.", 
+                       "autoconfig.", "mail.", "cpcalendars.", "autodiscover.")
+    
+    parsed_subdomains = []
+    for sub in sorted(all_subdomains):
+        sub_type = "cpanel" if sub.startswith(cpanel_prefixes) else "regular"
+        parsed_subdomains.append({
+            "subdomain": sub,
+            "type": sub_type,
+            "url": f"https://{sub}"
+        })
+    
+    result["subdomains"] = parsed_subdomains[:100]  # Limit to 100
+    result["count"] = len(all_subdomains)
+    result["total_found"] = len(all_subdomains)
+    
+    if not result["sources"]:
+        result["status"] = "error"
+        result["error"] = "No subdomain tools available. Install: subfinder, assetfinder"
+    
+    return result
 
 # =============================================================================
-# CMS DETECTION
+# CMS DETECTION - Clean Output
 # =============================================================================
 
 def run_cms_detection(target: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Dict[str, Any]:
-    """Detect CMS using pattern matching on HTTP response."""
-    import requests
+    """Detect CMS with clean structured output."""
+    result = {
+        "detected": False,
+        "cms_name": None,
+        "cms_version": None,
+        "confidence": "low",
+        "indicators": [],
+        "target": target,
+        "status": "completed"
+    }
     
     try:
-        headers = {"User-Agent": user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        headers = {
+            "User-Agent": user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
         proxies = {"http": proxy, "https": proxy} if proxy else None
         
+        # Try HTTPS first, fallback to HTTP
         url = f"https://{target}"
         try:
-            response = requests.get(url, headers=headers, timeout=30, proxies=proxies, verify=False)
+            resp = requests.get(url, headers=headers, timeout=15, proxies=proxies, verify=False, allow_redirects=True)
         except:
             url = f"http://{target}"
-            response = requests.get(url, headers=headers, timeout=30, proxies=proxies, verify=False)
+            resp = requests.get(url, headers=headers, timeout=15, proxies=proxies, verify=False, allow_redirects=True)
         
-        text = response.text
+        text = resp.text
         
-        # CMS detection patterns
-        cms_patterns = {
-            "WordPress": [r'wp-content', r'wp-includes', r'<meta name="generator" content="WordPress'],
-            "Joomla": [r'/media/system/js/', r'<meta name="generator" content="Joomla'],
-            "Drupal": [r'/sites/all/', r'<meta name="generator" content="Drupal'],
-            "Moodle": [r'<meta name="keywords" content="moodle'],
-            "Shopify": [r'cdn.shopify.com', r'Shopify.theme'],
-            "Magento": [r'/skin/frontend/', r'Mage.Cookies'],
-            "Laravel": [],  # Check via cookies
+        # CMS Detection with confidence scoring
+        cms_signatures = {
+            "WordPress": {
+                "patterns": [r'/wp-content/', r'/wp-includes/', r'wp-json'],
+                "meta": r'<meta name="generator" content="WordPress ([\d.]+)"',
+            },
+            "Joomla": {
+                "patterns": [r'/media/system/js/', r'/components/com_'],
+                "meta": r'<meta name="generator" content="Joomla[!]?\s*([\d.]*)"',
+            },
+            "Drupal": {
+                "patterns": [r'/sites/all/', r'/sites/default/', r'Drupal.settings'],
+                "meta": r'<meta name="Generator" content="Drupal ([\d.]+)"',
+            },
+            "Shopify": {
+                "patterns": [r'cdn\.shopify\.com', r'Shopify\.theme'],
+                "meta": None,
+            },
+            "Laravel": {
+                "patterns": [],
+                "cookies": ['laravel_session', 'XSRF-TOKEN'],
+            },
+            "Magento": {
+                "patterns": [r'/skin/frontend/', r'Mage\.Cookies', r'/static/frontend/'],
+                "meta": None,
+            },
         }
         
-        detected_cms = None
-        version = None
-        
-        for cms, patterns in cms_patterns.items():
-            for pattern in patterns:
+        for cms, sigs in cms_signatures.items():
+            score = 0
+            indicators = []
+            version = None
+            
+            # Check patterns
+            for pattern in sigs.get("patterns", []):
                 if re.search(pattern, text, re.IGNORECASE):
-                    detected_cms = cms
-                    break
-            if detected_cms:
+                    score += 1
+                    indicators.append(f"Found: {pattern}")
+            
+            # Check meta generator
+            if sigs.get("meta"):
+                match = re.search(sigs["meta"], text, re.IGNORECASE)
+                if match:
+                    score += 2
+                    version = match.group(1) if match.groups() else None
+                    indicators.append("Generator meta tag found")
+            
+            # Check cookies
+            for cookie in sigs.get("cookies", []):
+                if cookie in resp.cookies:
+                    score += 2
+                    indicators.append(f"Cookie: {cookie}")
+            
+            if score > 0:
+                result["detected"] = True
+                result["cms_name"] = cms
+                result["cms_version"] = version
+                result["indicators"] = indicators
+                result["confidence"] = "high" if score >= 3 else "medium" if score >= 2 else "low"
                 break
         
-        # Check Laravel via cookies
-        if not detected_cms:
-            if 'laravel_session' in response.cookies or 'XSRF-TOKEN' in response.cookies:
-                detected_cms = "Laravel"
+        result["url"] = url
+        result["http_status"] = resp.status_code
         
-        # Try to extract version for WordPress
-        if detected_cms == "WordPress":
-            match = re.search(r'<meta name="generator" content="WordPress ([\d.]+)"', text)
-            if match:
-                version = match.group(1)
-        
-        return {
-            "detected": detected_cms is not None,
-            "cms_name": detected_cms,
-            "version": version,
-            "url": url
-        }
-        
+    except requests.RequestException as e:
+        result["status"] = "error"
+        result["error"] = f"Connection failed: {str(e)}"
     except Exception as e:
-        return {"error": str(e), "detected": False, "cms_name": None}
+        result["status"] = "error"
+        result["error"] = str(e)
+    
+    return result
 
 # =============================================================================
-# TECHNOLOGY DETECTION
+# TECHNOLOGY DETECTION - Clean Output
 # =============================================================================
 
 def run_tech_detection(target: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Dict[str, Any]:
-    """Detect web technologies using headers and response analysis."""
-    import requests
+    """Detect web technologies with categorized output."""
+    result = {
+        "technologies": [],
+        "categories": {},
+        "headers": {},
+        "target": target,
+        "status": "completed"
+    }
     
     try:
         headers = {"User-Agent": user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -417,157 +462,233 @@ def run_tech_detection(target: str, proxy: Optional[str] = None, user_agent: Opt
         
         url = f"https://{target}"
         try:
-            response = requests.get(url, headers=headers, timeout=30, proxies=proxies, verify=False)
+            resp = requests.get(url, headers=headers, timeout=15, proxies=proxies, verify=False)
         except:
             url = f"http://{target}"
-            response = requests.get(url, headers=headers, timeout=30, proxies=proxies, verify=False)
+            resp = requests.get(url, headers=headers, timeout=15, proxies=proxies, verify=False)
         
-        technologies = []
+        text = resp.text
+        found_tech = []
+        categories = {
+            "web_server": [],
+            "programming": [],
+            "javascript": [],
+            "css_framework": [],
+            "analytics": [],
+            "cdn": [],
+            "other": []
+        }
         
-        # Check headers
-        server = response.headers.get('Server', '')
-        if 'nginx' in server.lower():
-            technologies.append(f"nginx ({server.split('/')[1] if '/' in server else ''})")
-        elif 'apache' in server.lower():
-            technologies.append(f"Apache ({server})")
-        elif 'cloudflare' in server.lower():
-            technologies.append("Cloudflare")
+        # Server header
+        server = resp.headers.get('Server', '')
+        if server:
+            result["headers"]["Server"] = server
+            if 'nginx' in server.lower():
+                found_tech.append({"name": "nginx", "version": server, "category": "web_server"})
+                categories["web_server"].append("nginx")
+            elif 'apache' in server.lower():
+                found_tech.append({"name": "Apache", "version": server, "category": "web_server"})
+                categories["web_server"].append("Apache")
+            elif 'cloudflare' in server.lower():
+                found_tech.append({"name": "Cloudflare", "category": "cdn"})
+                categories["cdn"].append("Cloudflare")
         
-        powered_by = response.headers.get('X-Powered-By', '')
-        if powered_by:
-            technologies.append(powered_by)
+        # X-Powered-By
+        powered = resp.headers.get('X-Powered-By', '')
+        if powered:
+            result["headers"]["X-Powered-By"] = powered
+            found_tech.append({"name": powered, "category": "programming"})
+            categories["programming"].append(powered)
         
-        # Check response body
-        text = response.text
-        
+        # Content analysis
         tech_patterns = {
-            "jQuery": r'jquery[.-]?\d*\.?\d*\.?min\.js|jquery\.js',
-            "Bootstrap": r'bootstrap[.-]?\d*\.?\d*\.?(min\.)?css',
-            "React": r'react[.-]?\d*\.?\d*\.?min\.js|__REACT',
-            "Vue.js": r'vue[.-]?\d*\.?\d*\.?min\.js|v-if|v-for',
-            "Angular": r'angular[.-]?\d*\.?\d*\.?min\.js|ng-app',
-            "Tailwind CSS": r'tailwindcss|tailwind\.css',
-            "Font Awesome": r'font-awesome|fontawesome',
-            "Google Analytics": r'google-analytics\.com|gtag\.js',
-            "Google Tag Manager": r'googletagmanager\.com',
+            ("jQuery", "javascript"): r'jquery[.\-]?\d*\.?\d*\.?(min\.)?js',
+            ("Bootstrap", "css_framework"): r'bootstrap[.\-]?\d*\.?(min\.)?css',
+            ("React", "javascript"): r'react[.\-]?dom|__REACT|_react',
+            ("Vue.js", "javascript"): r'vue[.\-]?\d*\.?\d*\.?min\.js|v-if=|v-for=',
+            ("Angular", "javascript"): r'angular[.\-]?\d*\.?min\.js|ng-app|ng-controller',
+            ("Tailwind CSS", "css_framework"): r'tailwindcss|tailwind\.min\.css',
+            ("Font Awesome", "css_framework"): r'font-?awesome|fa-[a-z]+-',
+            ("Google Analytics", "analytics"): r'google-analytics\.com/analytics|gtag\s*\(',
+            ("Google Tag Manager", "analytics"): r'googletagmanager\.com/gtm',
+            ("Cloudflare", "cdn"): r'cdnjs\.cloudflare\.com|cloudflare\.com',
         }
         
-        for tech, pattern in tech_patterns.items():
+        for (tech, cat), pattern in tech_patterns.items():
             if re.search(pattern, text, re.IGNORECASE):
-                technologies.append(tech)
+                if not any(t["name"] == tech for t in found_tech):
+                    found_tech.append({"name": tech, "category": cat})
+                    categories[cat].append(tech)
         
-        return {
-            "technologies": list(set(technologies)),
-            "count": len(technologies),
-            "url": url
-        }
+        result["technologies"] = found_tech
+        result["categories"] = {k: v for k, v in categories.items() if v}
+        result["count"] = len(found_tech)
+        result["url"] = url
         
     except Exception as e:
-        return {"error": str(e), "technologies": []}
+        result["status"] = "error"
+        result["error"] = str(e)
+    
+    return result
 
 # =============================================================================
-# DIRECTORY SCANNING
+# DIRECTORY SCANNING - Clean Output
 # =============================================================================
 
 def run_directory_scan(target: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Dict[str, Any]:
-    """Run directory scanning using dirsearch."""
+    """Run directory scanning with clean parsed output."""
+    result = {
+        "directories": [],
+        "count": 0,
+        "by_status": {},
+        "target": target,
+        "status": "completed"
+    }
+    
     try:
-        # Create temporary file for output
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             output_file = f.name
         
-        cmd = ["dirsearch", "-u", f"https://{target}", "-o", output_file, "--format=json", "-q"]
+        url = f"https://{target}"
+        cmd = ["dirsearch", "-u", url, "-o", output_file, "--format=json", "-q", "-t", "20"]
         
         if user_agent:
             cmd.extend(["--user-agent", sanitize_command_arg(user_agent)])
         if proxy:
             cmd.extend(["--proxy", sanitize_command_arg(proxy)])
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         
         directories = []
+        status_count = {"200": 0, "301": 0, "302": 0, "403": 0, "500": 0}
         
         if os.path.exists(output_file):
             try:
                 with open(output_file, 'r') as f:
                     data = json.load(f)
-                    if "results" in data:
-                        for item in data["results"][:100]:  # Limit to 100
-                            directories.append({
-                                "path": item.get("url", ""),
-                                "status": item.get("status", 0),
-                                "size": item.get("content-length", 0)
-                            })
-            except:
-                pass
+                    for item in data.get("results", [])[:100]:
+                        status = item.get("status", 0)
+                        path = item.get("path", item.get("url", ""))
+                        
+                        # Determine severity
+                        severity = "info"
+                        if status == 200:
+                            severity = "success"
+                        elif status == 403:
+                            severity = "warning"
+                        elif status >= 500:
+                            severity = "error"
+                        
+                        directories.append({
+                            "path": path,
+                            "status": status,
+                            "size": item.get("content-length", 0),
+                            "redirect": item.get("redirect", ""),
+                            "severity": severity
+                        })
+                        
+                        status_key = str(status)
+                        status_count[status_key] = status_count.get(status_key, 0) + 1
             finally:
                 os.unlink(output_file)
         
-        return {
-            "directories": directories,
-            "count": len(directories)
-        }
+        # Sort by status code
+        result["directories"] = sorted(directories, key=lambda x: x["status"])
+        result["count"] = len(directories)
+        result["by_status"] = {k: v for k, v in status_count.items() if v > 0}
         
     except subprocess.TimeoutExpired:
-        return {"error": "Timeout", "directories": []}
+        result["status"] = "timeout"
+        result["error"] = "Scan timed out after 5 minutes"
     except FileNotFoundError:
-        return {"error": "dirsearch not installed", "directories": []}
+        result["status"] = "error"
+        result["error"] = "dirsearch not installed. Run: pip install dirsearch"
     except Exception as e:
-        return {"error": str(e), "directories": []}
+        result["status"] = "error"
+        result["error"] = str(e)
+    
+    return result
 
 # =============================================================================
-# WORDPRESS ENUMERATION
+# WORDPRESS ENUMERATION - Clean Output
 # =============================================================================
 
 def run_wp_enum(target: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Dict[str, Any]:
-    """Run WordPress enumeration using wpscan."""
+    """Run WordPress enumeration with clean parsed output."""
+    result = {
+        "wordpress_detected": False,
+        "version": None,
+        "plugins": [],
+        "themes": [],
+        "users": [],
+        "vulnerabilities": [],
+        "target": target,
+        "status": "completed"
+    }
+    
     try:
-        cmd = ["wpscan", "--url", f"https://{target}", "--enumerate", "p,t,u", "--format", "json"]
+        url = f"https://{target}"
+        cmd = ["wpscan", "--url", url, "--enumerate", "vp,vt,u", "--format", "json", "--random-user-agent"]
         
         if proxy:
             cmd.extend(["--proxy", sanitize_command_arg(proxy)])
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         
         try:
-            data = json.loads(result.stdout)
+            data = json.loads(proc.stdout)
             
-            plugins = []
-            themes = []
-            users = []
+            result["wordpress_detected"] = True
             
-            if "plugins" in data:
-                for name, info in data["plugins"].items():
-                    plugins.append({
-                        "name": name,
-                        "version": info.get("version", {}).get("number", "unknown"),
-                        "vulnerable": len(info.get("vulnerabilities", [])) > 0
+            # Version
+            if "version" in data:
+                result["version"] = data["version"].get("number")
+            
+            # Plugins
+            for name, info in data.get("plugins", {}).items():
+                vulns = info.get("vulnerabilities", [])
+                result["plugins"].append({
+                    "name": name,
+                    "version": info.get("version", {}).get("number", "unknown"),
+                    "outdated": info.get("outdated", False),
+                    "vulnerabilities": len(vulns),
+                    "vulnerable": len(vulns) > 0
+                })
+                for v in vulns:
+                    result["vulnerabilities"].append({
+                        "component": f"Plugin: {name}",
+                        "title": v.get("title", "Unknown"),
+                        "type": v.get("vuln_type", "Unknown"),
+                        "severity": "high" if "critical" in str(v).lower() else "medium"
                     })
             
-            if "themes" in data:
-                for name, info in data["themes"].items():
-                    themes.append({
-                        "name": name,
-                        "version": info.get("version", {}).get("number", "unknown")
-                    })
+            # Themes
+            for name, info in data.get("themes", {}).items():
+                result["themes"].append({
+                    "name": name,
+                    "version": info.get("version", {}).get("number", "unknown"),
+                    "outdated": info.get("outdated", False)
+                })
             
-            if "users" in data:
-                for user in data["users"]:
-                    users.append(user.get("username", ""))
-            
-            return {
-                "plugins": plugins[:50],
-                "themes": themes[:20],
-                "users": users[:20],
-                "wp_version": data.get("version", {}).get("number", "unknown")
-            }
+            # Users
+            for user in data.get("users", []):
+                result["users"].append({
+                    "username": user.get("username", ""),
+                    "id": user.get("id")
+                })
             
         except json.JSONDecodeError:
-            return {"error": "Failed to parse wpscan output", "plugins": [], "themes": [], "users": []}
-        
+            result["status"] = "parse_error"
+            result["error"] = "Failed to parse wpscan output"
+            
     except subprocess.TimeoutExpired:
-        return {"error": "Timeout", "plugins": [], "themes": [], "users": []}
+        result["status"] = "timeout"
+        result["error"] = "Scan timed out after 10 minutes"
     except FileNotFoundError:
-        return {"error": "wpscan not installed", "plugins": [], "themes": [], "users": []}
+        result["status"] = "error"
+        result["error"] = "wpscan not installed. Run: gem install wpscan"
     except Exception as e:
-        return {"error": str(e), "plugins": [], "themes": [], "users": []}
+        result["status"] = "error"
+        result["error"] = str(e)
+    
+    return result
