@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background-primary text-text-primary antialiased;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-background-primary;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-background-tertiary rounded;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-accent-secondary;
+}
