@@ -1,16 +1,14 @@
 """
-AI Summary Service - Enhanced Analysis
-Generates professional executive summaries with CVE lookup and findings table.
+AI Summary Service - Concise Analysis
+Generates brief executive summary with focus on findings and CVE table.
 """
 from google import genai
-from google.genai import types
 import json
 
 def generate_ai_summary(scan_data: dict, api_key: str = None) -> dict:
     """
-    Generates an enhanced executive summary using Gemini API.
+    Generates a concise executive summary with detailed findings.
     Returns dict with 'summary' and 'findings' (list for table).
-    Falls back to basic summary if API fails.
     """
     if not api_key:
         return {
@@ -21,7 +19,6 @@ def generate_ai_summary(scan_data: dict, api_key: str = None) -> dict:
     try:
         client = genai.Client(api_key=api_key)
         
-        # Prepare comprehensive context
         target = scan_data.get('target', 'Unknown')
         results = scan_data.get('results', {})
         
@@ -33,86 +30,44 @@ def generate_ai_summary(scan_data: dict, api_key: str = None) -> dict:
         tech = results.get('tech', {}).get('technologies', [])
         directories = results.get('dir', {}).get('directories', [])
         
-        # Build detailed context for AI
-        ports_detail = ""
-        for p in ports[:15]:
-            ports_detail += f"  - Port {p.get('port')}/{p.get('protocol', 'tcp')}: {p.get('service', 'unknown')} v{p.get('version', 'unknown')} (Risk: {p.get('risk', 'low')})\n"
+        # Build context
+        ports_info = ", ".join([f"{p.get('port')}/{p.get('service','?')} v{p.get('version','?')}" for p in ports[:10]])
+        tech_info = ", ".join([t.get('name', t) if isinstance(t, dict) else t for t in tech[:8]])
+        dirs_info = ", ".join([d.get('path','') for d in directories[:8]])
+        subdo_info = ", ".join([s.get('subdomain', s) if isinstance(s, dict) else s for s in subdomains[:15]])
         
-        tech_detail = ""
-        for t in tech[:10]:
-            if isinstance(t, dict):
-                tech_detail += f"  - {t.get('name', 'Unknown')} (Category: {t.get('category', 'General')})\n"
-            else:
-                tech_detail += f"  - {t}\n"
-        
-        dirs_detail = ""
-        for d in directories[:10]:
-            dirs_detail += f"  - {d.get('path')} (Status: {d.get('status')}, Severity: {d.get('severity', 'info')})\n"
-        
-        subdo_sample = ""
-        for s in subdomains[:20]:
-            name = s.get('subdomain', s) if isinstance(s, dict) else s
-            subdo_sample += f"  - {name}\n"
-        
-        prompt = f"""You are a Senior Penetration Tester and Security Analyst. Analyze the following reconnaissance scan results for target: {target}
+        prompt = f"""You are a security analyst. Analyze this scan of {target}:
 
-=== SCAN RESULTS ===
+WAF: {"Protected by " + waf.get('waf_name', 'Unknown') if waf.get('detected') else "UNPROTECTED"}
+Ports ({len(ports)}): {ports_info or 'None'}
+CMS: {cms.get('cms_name', 'None')} {cms.get('cms_version', '')}
+Tech: {tech_info or 'None'}
+Subdomains ({subdomain_count}): {subdo_info or 'None'}
+Directories: {dirs_info or 'None'}
 
-1. WAF DETECTION:
-   Status: {"DETECTED - " + waf.get('waf_name', 'Unknown') if waf.get('detected') else "NOT DETECTED (VULNERABLE)"}
-   Vendor: {waf.get('waf_vendor', 'N/A')}
+Provide:
 
-2. OPEN PORTS & SERVICES ({len(ports)} found):
-{ports_detail if ports_detail else "   No ports scanned or found."}
+1. SUMMARY (3-4 sentences MAX): State overall risk level, main concerns, and action priority. Be direct.
 
-3. CMS DETECTION:
-   Detected: {cms.get('cms_name', 'None')} {cms.get('cms_version', '')}
-   Confidence: {cms.get('confidence', 'N/A')}
+2. FINDINGS (JSON array, focus on actionable items):
+[
+  {{"finding": "Brief description", "severity": "Critical/High/Medium/Low", "cve": "CVE-XXXX-XXXX", "action": "What to do"}}
+]
 
-4. TECHNOLOGY STACK:
-{tech_detail if tech_detail else "   No technologies identified."}
+Include:
+- Known CVEs for detected software versions
+- Interesting subdomains (admin, api, dev, staging, test, backup)
+- Exposed sensitive directories
+- Missing security controls
+- Outdated software
 
-5. SUBDOMAINS ({subdomain_count} discovered):
-{subdo_sample if subdo_sample else "   None found."}
+Keep findings SHORT. Max 10 items. Use N/A if no CVE.
 
-6. DIRECTORIES/ENDPOINTS:
-{dirs_detail if dirs_detail else "   None found."}
-
-=== YOUR TASK ===
-
-Provide a comprehensive security analysis with the following structure:
-
-1. EXECUTIVE SUMMARY (2-3 paragraphs):
-   - Overall security posture assessment
-   - Critical risks and immediate concerns
-   - Attack surface evaluation
-
-2. KEY FINDINGS TABLE:
-   For each notable finding, provide JSON array format:
-   [
-     {{"finding": "Description", "severity": "Critical/High/Medium/Low", "recommendation": "Action to take", "cve": "CVE-XXXX-XXXX or N/A"}}
-   ]
-   
-   Focus on:
-   - Services with known CVEs based on version numbers
-   - Exposed administrative endpoints
-   - Outdated software versions
-   - Missing security controls (no WAF, etc)
-   - Interesting subdomains (admin, dev, staging, api, etc)
-   - Sensitive directories found
-
-IMPORTANT:
-- For any software version found, research known CVEs for that version
-- Be specific about which endpoints/subdomains need investigation
-- Prioritize findings by actual risk
-- Keep summary professional and actionable
-
-Output format (use exactly this structure):
+Format exactly:
 ---SUMMARY---
-[Your executive summary here]
+[brief summary]
 ---FINDINGS---
-[JSON array of findings]
-"""
+[json array]"""
         
         response = client.models.generate_content(
             model='gemini-2.5-flash',
@@ -121,67 +76,41 @@ Output format (use exactly this structure):
         
         raw_text = response.text
         
-        # Parse response
         summary = ""
         findings = []
         
         if "---SUMMARY---" in raw_text and "---FINDINGS---" in raw_text:
             parts = raw_text.split("---FINDINGS---")
-            summary = parts[0].replace("---SUMMARY---", "").strip()
+            summary = parts[0].replace("---SUMMARY---", "").strip()[:500]  # Limit length
             
             if len(parts) > 1:
-                findings_text = parts[1].strip()
-                # Try to extract JSON array
                 try:
-                    # Find JSON array in the text
-                    start = findings_text.find('[')
-                    end = findings_text.rfind(']') + 1
+                    start = parts[1].find('[')
+                    end = parts[1].rfind(']') + 1
                     if start != -1 and end > start:
-                        json_str = findings_text[start:end]
-                        findings = json.loads(json_str)
+                        findings = json.loads(parts[1][start:end])
                 except:
-                    findings = []
+                    pass
         else:
-            # Fallback: use entire response as summary
-            summary = raw_text.replace('*', '').strip()
+            summary = raw_text[:400]
         
-        return {
-            "summary": summary,
-            "findings": findings
-        }
+        return {"summary": summary, "findings": findings}
         
     except Exception as e:
-        print(f"Gemini API Error: {str(e)}")
         return {
-            "summary": generate_basic_summary(scan_data) + f" (AI Generation Failed: {str(e)[:50]})",
+            "summary": generate_basic_summary(scan_data),
             "findings": []
         }
 
 
 def generate_basic_summary(scan_data: dict) -> str:
-    """Generate a basic summary without AI."""
+    """Generate basic summary without AI."""
     results = scan_data.get('results', {})
-    parts = []
-    
-    # Check WAF
     waf = results.get('waf', {})
-    if waf.get('detected'):
-        parts.append(f"Target is protected by {waf.get('waf_name', 'WAF')}.")
-    else:
-        parts.append("Target appears UNPROTECTED (No WAF detected).")
+    ports = results.get('port', {}).get('open_ports', [])
+    subdo = results.get('subdo', {}).get('count', 0)
     
-    # Check Ports
-    port = results.get('port', {})
-    open_ports = port.get('open_ports', [])
-    high_risk_ports = [p for p in open_ports if p.get('risk') == 'high']
-    if high_risk_ports:
-        parts.append(f"CRITICAL: Found {len(high_risk_ports)} high-risk open ports.")
-    else:
-        parts.append(f"Confirmed {len(open_ports)} exposed services.")
-        
-    # Check Subdomains
-    subdo = results.get('subdo', {})
-    count = subdo.get('count', 0)
-    parts.append(f"Mapped {count} subdomains.")
-        
-    return " ".join(parts)
+    status = "Protected" if waf.get('detected') else "Unprotected"
+    risk_ports = len([p for p in ports if p.get('risk') == 'high'])
+    
+    return f"Target is {status}. Found {len(ports)} ports ({risk_ports} high-risk), {subdo} subdomains."
