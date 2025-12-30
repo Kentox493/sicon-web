@@ -90,13 +90,13 @@ export const reportsAPI = {
         return response.data;
     },
 
-    generate: async (scanId) => {
-        const response = await api.post(`/api/reports/generate/${scanId}`);
+    generate: async (scanId, useAi = false) => {
+        const response = await api.post(`/api/reports/generate/${scanId}?use_ai=${useAi}`);
         return response.data;
     },
 
-    download: async (scanId) => {
-        const response = await api.get(`/api/reports/download/${scanId}`, {
+    download: async (scanId, useAi = false) => {
+        const response = await api.get(`/api/reports/download/${scanId}?use_ai=${useAi}`, {
             responseType: 'blob',
         });
         return response.data;
@@ -104,6 +104,24 @@ export const reportsAPI = {
 
     delete: async (reportId) => {
         await api.delete(`/api/reports/${reportId}`);
+    },
+};
+
+// Settings API
+export const settingsAPI = {
+    get: async () => {
+        const response = await api.get('/api/settings/');
+        return response.data;
+    },
+
+    update: async (data) => {
+        const response = await api.put('/api/settings/', data);
+        return response.data;
+    },
+
+    deleteGeminiKey: async () => {
+        const response = await api.delete('/api/settings/gemini-key');
+        return response.data;
     },
 };
 

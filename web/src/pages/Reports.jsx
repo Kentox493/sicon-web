@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Trash2, RefreshCw, Loader2, FileWarning, Search, Plus } from 'lucide-react';
+import { FileText, Download, Trash2, RefreshCw, Loader2, FileWarning, Search, Sparkles, File } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Badge } from '../components/common/Badge';
-import { scansAPI, reportsAPI } from '../services/api';
+import { scansAPI, reportsAPI, settingsAPI } from '../services/api';
 
 const Reports = () => {
     const [reports, setReports] = useState([]);
@@ -12,6 +12,7 @@ const Reports = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [generating, setGenerating] = useState(null);
     const [downloading, setDownloading] = useState(null);
+    const [hasAiKey, setHasAiKey] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -20,22 +21,24 @@ const Reports = () => {
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const [reportsData, scansData] = await Promise.all([
+            const [reportsData, scansData, settingsData] = await Promise.all([
                 reportsAPI.list(),
-                scansAPI.list()
+                scansAPI.list(),
+                settingsAPI.get()
             ]);
             setReports(reportsData);
             setScans(scansData.filter(s => s.status === 'completed'));
+            setHasAiKey(settingsData.has_gemini_key);
         } catch (error) {
             console.error('Failed to fetch data:', error);
         }
         setIsLoading(false);
     };
 
-    const handleGenerate = async (scanId) => {
-        setGenerating(scanId);
+    const handleGenerate = async (scanId, useAi = false) => {
+        setGenerating({ scanId, useAi });
         try {
-            await reportsAPI.generate(scanId);
+            await reportsAPI.generate(scanId, useAi);
             await fetchData();
         } catch (error) {
             console.error('Failed to generate report:', error);
@@ -44,14 +47,15 @@ const Reports = () => {
         setGenerating(null);
     };
 
-    const handleDownload = async (scanId, target) => {
-        setDownloading(scanId);
+    const handleDownload = async (scanId, target, useAi = false) => {
+        setDownloading({ scanId, useAi });
         try {
-            const blob = await reportsAPI.download(scanId);
+            const blob = await reportsAPI.download(scanId, useAi);
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `S1C0N_Report_${target}_${scanId}.pdf`;
+            const type = useAi ? 'AI' : 'STANDARD';
+            a.download = `S1C0N_${type}_${target}_${scanId}.pdf`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -84,11 +88,7 @@ const Reports = () => {
     const formatDate = (dateStr) => {
         if (!dateStr) return 'N/A';
         return new Date(dateStr).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
+            year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
     };
 
@@ -104,40 +104,69 @@ const Reports = () => {
                 </Button>
             </div>
 
+            {/* AI Key Status */}
+            {!hasAiKey && (
+                <div className="flex items-center gap-3 p-4 rounded-lg bg-status-warning/10 border border-status-warning/20">
+                    <Sparkles className="w-5 h-5 text-status-warning" />
+                    <div className="flex-1">
+                        <p className="text-text-primary font-medium">AI Reports Disabled</p>
+                        <p className="text-sm text-text-secondary">Add your Gemini API key in Settings to enable AI-enhanced reports.</p>
+                    </div>
+                    <a href="/settings" className="text-accent-primary hover:underline text-sm">Configure</a>
+                </div>
+            )}
+
             {/* Generate New Report Section */}
             <Card className="border-accent-primary/20">
                 <CardHeader>
-                    <h2 className="text-lg font-semibold flex items-center gap-2">
-                        <Plus className="w-5 h-5 text-accent-primary" />
-                        Generate New Report
-                    </h2>
+                    <h2 className="text-lg font-semibold">Generate New Report</h2>
                 </CardHeader>
                 <CardContent>
                     {scans.length === 0 ? (
-                        <p className="text-text-secondary text-center py-4">No completed scans available. Run a scan first to generate reports.</p>
+                        <p className="text-text-secondary text-center py-4">No completed scans. Run a scan first.</p>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="space-y-4">
                             {scans.map((scan) => (
                                 <div key={scan.id} className="flex items-center justify-between p-4 rounded-lg bg-background-tertiary/50 hover:bg-background-tertiary transition-colors border border-border/20">
                                     <div className="min-w-0 flex-1">
                                         <p className="font-mono text-sm text-accent-primary truncate">{scan.target}</p>
                                         <p className="text-xs text-text-secondary mt-1">ID: #{scan.id} • {formatDate(scan.completed_at)}</p>
                                     </div>
-                                    <Button
-                                        size="sm"
-                                        onClick={() => handleGenerate(scan.id)}
-                                        disabled={generating === scan.id}
-                                        className="ml-4"
-                                    >
-                                        {generating === scan.id ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <>
-                                                <FileText className="w-4 h-4 mr-1" />
-                                                Generate
-                                            </>
-                                        )}
-                                    </Button>
+                                    <div className="flex gap-2 ml-4">
+                                        {/* Standard Report */}
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={() => handleDownload(scan.id, scan.target, false)}
+                                            disabled={downloading?.scanId === scan.id}
+                                        >
+                                            {downloading?.scanId === scan.id && !downloading?.useAi ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <>
+                                                    <File className="w-4 h-4 mr-1" />
+                                                    Standard
+                                                </>
+                                            )}
+                                        </Button>
+
+                                        {/* AI Report */}
+                                        <Button
+                                            size="sm"
+                                            onClick={() => handleDownload(scan.id, scan.target, true)}
+                                            disabled={!hasAiKey || downloading?.scanId === scan.id}
+                                            title={!hasAiKey ? 'Configure Gemini API key in Settings' : 'Generate AI-enhanced report'}
+                                        >
+                                            {downloading?.scanId === scan.id && downloading?.useAi ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <>
+                                                    <Sparkles className="w-4 h-4 mr-1" />
+                                                    AI Report
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -149,10 +178,6 @@ const Reports = () => {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                     <h2 className="text-lg font-semibold">Generated Reports</h2>
-                    <div className="relative w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
-                        <Input placeholder="Search reports..." className="pl-9 bg-background-tertiary border-transparent" />
-                    </div>
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -163,54 +188,39 @@ const Reports = () => {
                         <div className="flex flex-col items-center justify-center py-12 text-text-secondary">
                             <FileWarning className="w-12 h-12 mb-4 opacity-50" />
                             <p>No reports generated yet.</p>
-                            <p className="text-sm mt-1">Generate a report from a completed scan above.</p>
                         </div>
                     ) : (
                         <div className="space-y-3">
                             {reports.map((report) => {
                                 const scan = scans.find(s => s.id === report.scan_id);
+                                const isAiReport = report.filename.includes('AI');
                                 return (
                                     <div key={report.id} className="flex items-center justify-between p-4 rounded-lg bg-background-tertiary/50 hover:bg-background-tertiary transition-colors border border-border/20 group">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 rounded-lg bg-status-danger/10 flex items-center justify-center">
-                                                <FileText className="w-6 h-6 text-status-danger" />
+                                            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${isAiReport ? 'bg-accent-primary/10' : 'bg-status-danger/10'
+                                                }`}>
+                                                {isAiReport
+                                                    ? <Sparkles className="w-6 h-6 text-accent-primary" />
+                                                    : <FileText className="w-6 h-6 text-status-danger" />
+                                                }
                                             </div>
                                             <div>
                                                 <p className="font-medium text-text-primary">{report.filename}</p>
                                                 <div className="flex items-center gap-3 mt-1 text-sm text-text-secondary">
-                                                    <span>Target: {scan?.target || 'Unknown'}</span>
-                                                    <span>•</span>
                                                     <span>{formatFileSize(report.file_size)}</span>
                                                     <span>•</span>
                                                     <span>{formatDate(report.created_at)}</span>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Button
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={() => handleDownload(report.scan_id, scan?.target || 'report')}
-                                                disabled={downloading === report.scan_id}
-                                            >
-                                                {downloading === report.scan_id ? (
-                                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                                ) : (
-                                                    <>
-                                                        <Download className="w-4 h-4 mr-1" />
-                                                        Download
-                                                    </>
-                                                )}
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="hover:text-status-danger"
-                                                onClick={() => handleDelete(report.id)}
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="opacity-0 group-hover:opacity-100 hover:text-status-danger"
+                                            onClick={() => handleDelete(report.id)}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
                                     </div>
                                 );
                             })}

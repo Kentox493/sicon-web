@@ -1,92 +1,179 @@
-import React from 'react';
-import { Save, User, Fingerprint, Network, Terminal } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/common/Card';
+import React, { useState, useEffect } from 'react';
+import { Settings as SettingsIcon, Key, Save, Trash2, Eye, EyeOff, Loader2, Check, AlertCircle } from 'lucide-react';
+import { Card, CardHeader, CardContent } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Badge } from '../components/common/Badge';
+import { settingsAPI } from '../services/api';
 
 const Settings = () => {
+    const [geminiKey, setGeminiKey] = useState('');
+    const [showKey, setShowKey] = useState(false);
+    const [hasKey, setHasKey] = useState(false);
+    const [keyPreview, setKeyPreview] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [message, setMessage] = useState({ type: '', text: '' });
+
+    useEffect(() => {
+        fetchSettings();
+    }, []);
+
+    const fetchSettings = async () => {
+        setIsLoading(true);
+        try {
+            const data = await settingsAPI.get();
+            setHasKey(data.has_gemini_key);
+            setKeyPreview(data.gemini_key_preview || '');
+        } catch (error) {
+            console.error('Failed to fetch settings:', error);
+        }
+        setIsLoading(false);
+    };
+
+    const handleSaveKey = async () => {
+        if (!geminiKey.trim()) {
+            setMessage({ type: 'error', text: 'Please enter an API key' });
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const result = await settingsAPI.update({ gemini_api_key: geminiKey });
+            setHasKey(result.has_gemini_key);
+            setKeyPreview(result.gemini_key_preview || '');
+            setGeminiKey('');
+            setMessage({ type: 'success', text: 'API Key saved successfully!' });
+        } catch (error) {
+            setMessage({ type: 'error', text: error.response?.data?.detail || 'Failed to save API key' });
+        }
+        setIsSaving(false);
+    };
+
+    const handleDeleteKey = async () => {
+        if (!window.confirm('Are you sure you want to remove your Gemini API key?')) return;
+
+        try {
+            await settingsAPI.deleteGeminiKey();
+            setHasKey(false);
+            setKeyPreview('');
+            setMessage({ type: 'success', text: 'API Key removed successfully!' });
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Failed to remove API key' });
+        }
+    };
+
     return (
-        <div className="max-w-4xl space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-500">
             <div>
                 <h1 className="text-3xl font-bold text-text-primary">Settings</h1>
-                <p className="text-text-secondary mt-1">Configure global application preferences.</p>
+                <p className="text-text-secondary mt-1">Configure your S1C0N preferences and API keys.</p>
             </div>
 
-            <div className="grid gap-8">
-                {/* Network Settings */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Network className="w-5 h-5 text-accent-primary" />
-                            Network Configuration
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-text-secondary">Default Proxy</label>
-                                <Input placeholder="socks5://127.0.0.1:9050" />
-                                <p className="text-xs text-text-secondary">Used for all scans unless overridden.</p>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-text-secondary">Timeout (seconds)</label>
-                                <Input type="number" defaultValue="30" />
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-4 pt-2">
-                            <div className="flex items-center gap-2">
-                                <input type="checkbox" id="tor" className="rounded bg-background-tertiary border-border text-accent-primary focus:ring-accent-primary" />
-                                <label htmlFor="tor" className="text-sm text-text-primary">Enable Tor Network by default</label>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* API Keys */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Fingerprint className="w-5 h-5 text-accent-primary" />
-                            API Keys
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-text-secondary">Shodan API Key</label>
-                            <Input type="password" placeholder="sk_live_..." />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-text-secondary">SecurityTrails Key</label>
-                            <Input type="password" placeholder="Enter key..." />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* System */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Terminal className="w-5 h-5 text-accent-primary" />
-                            System Paths
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="p-4 rounded bg-background-tertiary font-mono text-xs text-text-secondary">
-                            <div className="flex justify-between mb-2"><span>Nmap Path:</span> <span className="text-status-success">/usr/bin/nmap</span></div>
-                            <div className="flex justify-between mb-2"><span>Wafw00f Path:</span> <span className="text-status-success">/usr/bin/wafw00f</span></div>
-                            <div className="flex justify-between"><span>Python Path:</span> <span className="text-status-success">/usr/bin/python3</span></div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <div className="flex justify-end pt-4">
-                    <Button size="lg" className="font-bold">
-                        <Save className="w-4 h-4 mr-2" /> Save Changes
-                    </Button>
+            {/* Message Alert */}
+            {message.text && (
+                <div className={`flex items-center gap-3 p-4 rounded-lg border ${message.type === 'success'
+                        ? 'bg-status-success/10 border-status-success/20 text-status-success'
+                        : 'bg-status-danger/10 border-status-danger/20 text-status-danger'
+                    }`}>
+                    {message.type === 'success' ? <Check className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                    <span>{message.text}</span>
+                    <button onClick={() => setMessage({ type: '', text: '' })} className="ml-auto">✕</button>
                 </div>
-            </div>
+            )}
+
+            {/* AI Settings */}
+            <Card className="border-accent-primary/20">
+                <CardHeader>
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                        <Key className="w-5 h-5 text-accent-primary" />
+                        AI Configuration
+                    </h2>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    {isLoading ? (
+                        <div className="flex justify-center py-8">
+                            <Loader2 className="w-6 h-6 animate-spin text-accent-primary" />
+                        </div>
+                    ) : (
+                        <>
+                            {/* Current Status */}
+                            <div className="flex items-center justify-between p-4 rounded-lg bg-background-tertiary/50">
+                                <div>
+                                    <p className="font-medium text-text-primary">Gemini API Key</p>
+                                    <p className="text-sm text-text-secondary">
+                                        {hasKey
+                                            ? `Configured ${keyPreview}`
+                                            : 'Not configured - AI features will be disabled'}
+                                    </p>
+                                </div>
+                                <Badge variant={hasKey ? 'success' : 'warning'}>
+                                    {hasKey ? 'Active' : 'Not Set'}
+                                </Badge>
+                            </div>
+
+                            {/* Input New Key */}
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-text-secondary">
+                                    {hasKey ? 'Update API Key' : 'Enter Gemini API Key'}
+                                </label>
+                                <div className="flex gap-3">
+                                    <div className="relative flex-1">
+                                        <Input
+                                            type={showKey ? 'text' : 'password'}
+                                            placeholder="AIza..."
+                                            value={geminiKey}
+                                            onChange={(e) => setGeminiKey(e.target.value)}
+                                            className="pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowKey(!showKey)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary"
+                                        >
+                                            {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
+                                    </div>
+                                    <Button onClick={handleSaveKey} disabled={isSaving}>
+                                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                                        Save
+                                    </Button>
+                                </div>
+                                <p className="text-xs text-text-secondary">
+                                    Get your free API key from{' '}
+                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer"
+                                        className="text-accent-primary hover:underline">
+                                        Google AI Studio
+                                    </a>
+                                </p>
+                            </div>
+
+                            {/* Delete Key */}
+                            {hasKey && (
+                                <div className="pt-4 border-t border-border/10">
+                                    <Button variant="ghost" className="text-status-danger hover:bg-status-danger/10" onClick={handleDeleteKey}>
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Remove API Key
+                                    </Button>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Additional Settings Placeholder */}
+            <Card>
+                <CardHeader>
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                        <SettingsIcon className="w-5 h-5 text-accent-primary" />
+                        General Settings
+                    </h2>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-text-secondary text-center py-8">More settings coming soon...</p>
+                </CardContent>
+            </Card>
         </div>
     );
 };

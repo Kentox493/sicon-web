@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 import io
 
@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.scan import Scan, Report
+from app.models.settings import UserSettings
 from app.services.report_generator import generate_scan_report
 
 router = APIRouter(prefix="/api/reports", tags=["Reports"])
@@ -37,6 +38,7 @@ async def list_reports(
 @router.post("/generate/{scan_id}")
 async def generate_report(
     scan_id: int,
+    use_ai: bool = Query(default=False, description="Use AI for executive summary"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -48,6 +50,19 @@ async def generate_report(
     
     if scan.status != "completed":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Scan is not completed yet")
+    
+    # Get user's API key if using AI
+    api_key = None
+    if use_ai:
+        user_settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.id).first()
+        if user_settings:
+            api_key = user_settings.get_api_key()
+        
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Gemini API key not configured. Please add your API key in Settings."
+            )
     
     # Generate PDF
     try:
@@ -66,16 +81,17 @@ async def generate_report(
             "email": current_user.email
         }
         
-        pdf_bytes = generate_scan_report(scan_data, user_data)
+        pdf_bytes = generate_scan_report(scan_data, user_data, use_ai=use_ai, api_key=api_key)
         
         # Save report to database
-        filename = f"S1C0N_Report_{scan.target}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        report_type = "ai" if use_ai else "standard"
+        filename = f"S1C0N_{report_type.upper()}_{scan.target}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         
         report = Report(
             scan_id=scan.id,
             user_id=current_user.id,
             filename=filename,
-            file_path=f"/reports/{filename}",  # Virtual path
+            file_path=f"/reports/{filename}",
             file_size=len(pdf_bytes),
             format="pdf"
         )
@@ -88,6 +104,7 @@ async def generate_report(
             "scan_id": scan.id,
             "filename": filename,
             "file_size": len(pdf_bytes),
+            "used_ai": use_ai,
             "message": "Report generated successfully"
         }
         
@@ -98,6 +115,7 @@ async def generate_report(
 @router.get("/download/{scan_id}")
 async def download_report(
     scan_id: int,
+    use_ai: bool = Query(default=False, description="Use AI for executive summary"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -109,6 +127,19 @@ async def download_report(
     
     if scan.status != "completed":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Scan is not completed yet")
+    
+    # Get user's API key if using AI
+    api_key = None
+    if use_ai:
+        user_settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.id).first()
+        if user_settings:
+            api_key = user_settings.get_api_key()
+        
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Gemini API key not configured. Please add your API key in Settings."
+            )
     
     # Generate PDF on-the-fly
     try:
@@ -127,9 +158,10 @@ async def download_report(
             "email": current_user.email
         }
         
-        pdf_bytes = generate_scan_report(scan_data, user_data)
+        pdf_bytes = generate_scan_report(scan_data, user_data, use_ai=use_ai, api_key=api_key)
         
-        filename = f"S1C0N_Report_{scan.target}_{scan.id}.pdf"
+        report_type = "AI" if use_ai else "STANDARD"
+        filename = f"S1C0N_{report_type}_{scan.target}_{scan.id}.pdf"
         
         return StreamingResponse(
             io.BytesIO(pdf_bytes),

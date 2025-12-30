@@ -15,3 +15,4 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     scans = relationship("Scan", back_populates="user")
+    settings = relationship("UserSettings", back_populates="user", uselist=False)
