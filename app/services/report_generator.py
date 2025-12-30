@@ -124,17 +124,17 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
         for f in ai_findings[:10]:
             finding = str(f.get('finding', ''))
             sev = str(f.get('severity', 'Info'))[:10]
-            cve = str(f.get('cve', 'N/A'))[:18]
+            cve = str(f.get('cve', 'N/A'))
             action = str(f.get('action', f.get('recommendation', '')))
             data.append([
                 Paragraph(finding, styles['SCell']),
                 sev,
-                cve,
+                Paragraph(cve, styles['SCell']),
                 Paragraph(action, styles['SCell'])
             ])
         
-        # Wider columns for text wrapping
-        ft = Table(data, colWidths=[130, 50, 90, 210])
+        # Adjusted column widths for better wrapping
+        ft = Table(data, colWidths=[120, 45, 110, 205])
         style_list = [
             ('GRID', (0, 0), (-1, -1), 0.5, GREEN),
             ('BACKGROUND', (0, 0), (-1, 0), GREEN),
@@ -248,6 +248,34 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
             tt = Table(td, colWidths=[70, 410])
             tt.setStyle(simple_table_style(header=True))
             story.append(tt)
+        story.append(Spacer(1, 8))
+
+    # Directories
+    if 'dir' in results:
+        dirs = results['dir'].get('directories', [])
+        if dirs:
+            story.append(Paragraph(f"DIRECTORIES ({len(dirs)})", styles['SHeading']))
+            
+            # Limit and chunk
+            max_dirs = min(len(dirs), 30)
+            for chunk_start in range(0, max_dirs, 15):
+                chunk = dirs[chunk_start:chunk_start+15]
+                dd = [["Status", "Path", "Severity"]]
+                for d in chunk:
+                    dd.append([
+                        str(d.get('status', '?')),
+                        str(d.get('path', ''))[:45],
+                        str(d.get('severity', 'info')).upper()
+                    ])
+                dt = Table(dd, colWidths=[60, 330, 90])
+                dt.setStyle(simple_table_style(header=(chunk_start == 0)))
+                story.append(dt)
+                if chunk_start + 15 < max_dirs:
+                    story.append(Spacer(1, 4))
+            
+            if len(dirs) > 30:
+                story.append(Paragraph(f"... and {len(dirs) - 30} more directories", styles['SSmall']))
+            story.append(Spacer(1, 8))
 
     # Footer
     story.append(Spacer(1, 20))
