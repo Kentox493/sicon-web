@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from core.database import Base
+from app.core.database import Base
 
 class User(Base):
     __tablename__ = "users"
@@ -14,5 +14,4 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
     scans = relationship("Scan", back_populates="user")

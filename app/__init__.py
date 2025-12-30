@@ -1,2 +1,1 @@
-# S1C0N Backend Application
-from app.main import app
+# S1C0N Backend - Leave empty to avoid import conflicts

@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import json
 
-from core.config import settings
-from core.database import engine, Base
-from routers import auth, scans
+from app.core.config import settings
+from app.core.database import engine, Base
+from app.routers import auth, scans
 
 # Create database tables
 Base.metadata.create_all(bind=engine)

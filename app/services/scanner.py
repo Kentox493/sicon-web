@@ -1,11 +1,7 @@
-"""
-Scanner Service Module
-"""
-
 from datetime import datetime
 from typing import Dict, Any
-from core.database import SessionLocal
-from models.scan import Scan
+from app.core.database import SessionLocal
+from app.models.scan import Scan
 
 def run_scan_task(scan_id: int, options: Dict[str, Any]):
     """Background task to run the scan."""

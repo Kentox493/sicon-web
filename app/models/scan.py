@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from core.database import Base
+from app.core.database import Base
 
 class Scan(Base):
     __tablename__ = "scans"
