@@ -149,8 +149,8 @@ const Landing = () => {
                                 desc: "Generate professional, branded reports with data visualizations and actionable remediation steps."
                             }
                         ].map((feature, idx) => (
-                            <div key={idx} className="p-8 rounded-2xl bg-background-primary border border-border/10 hover:border-accent-primary/30 hover:bg-background-tertiary transition-all duration-300 group">
-                                <div className="w-14 h-14 rounded-xl bg-accent-primary/10 flex items-center justify-center text-accent-primary mb-6 group-hover:scale-110 transition-transform">
+                            <div key={idx} className="glass-card p-8 rounded-2xl hover:bg-white/10 transition-all duration-300 group hover:-translate-y-2">
+                                <div className="w-14 h-14 rounded-xl bg-accent-primary/10 flex items-center justify-center text-accent-primary mb-6 group-hover:scale-110 transition-transform group-hover:rotate-3 duration-500">
                                     {feature.icon}
                                 </div>
                                 <h3 className="text-xl font-bold mb-3 group-hover:text-accent-primary transition-colors">{feature.title}</h3>
