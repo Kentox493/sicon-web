@@ -1,36 +1,71 @@
 """
-PDF Report Generator Service
+PDF Report Generator Service - Dark Theme
 
-Generates beautiful PDF reports from scan data using reportlab.
-Uses S1C0N color palette: Black (#000000) and WhatsApp Green (#25D366).
+Generates beautiful dark-themed PDF reports from scan data.
+Features:
+- S1C0N Design System (Black & WhatsApp Green)
+- Custom Logo Integration
+- Structured Data Tables
+- Security Summaries
 """
 
 import os
 import io
+import math
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, PageBreak
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, Image, PageBreak
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.pdfgen import canvas
 
 # S1C0N Color Palette
-SICON_BLACK = colors.Color(0, 0, 0)
+SICON_BLACK = colors.Color(0/255, 0/255, 0/255)
+SICON_BG_BLACK = colors.Color(5/255, 5/255, 5/255)  # Slightly lighter for contrast if needed, but keeping pure black request
 SICON_GREEN = colors.Color(37/255, 211/255, 102/255)
 SICON_DARK_GREEN = colors.Color(12/255, 26/255, 16/255)
 SICON_GRAY = colors.Color(156/255, 163/255, 175/255)
+SICON_WHITE = colors.Color(255/255, 255/255, 255/255)
+SICON_LIGHT_GRAY = colors.Color(229/255, 231/255, 235/255)
 
+# Path configuration
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+LOGO_PATH = os.path.join(BASE_DIR, "web", "src", "assets", "logo.png")
+
+def add_background(canvas, doc):
+    """Draws the dark background on every page."""
+    canvas.saveState()
+    canvas.setFillColor(SICON_BLACK)
+    canvas.rect(0, 0, A4[0], A4[1], fill=1)
+    
+    # Add subtle green border line at top
+    canvas.setStrokeColor(SICON_GREEN)
+    canvas.setLineWidth(2)
+    canvas.line(0, A4[1] - 5, A4[0], A4[1] - 5)
+    
+    # Add footer watermarks or similar if needed
+    canvas.restoreState()
 
 def create_styles():
-    """Create custom paragraph styles."""
+    """Create custom dark-theme paragraph styles."""
     styles = getSampleStyleSheet()
     
     styles.add(ParagraphStyle(
         name='SiconTitle',
         parent=styles['Title'],
-        fontSize=28,
+        fontSize=24,
+        textColor=SICON_WHITE,
+        spaceAfter=10,
+        alignment=TA_CENTER,
+    ))
+    
+    styles.add(ParagraphStyle(
+        name='SiconSubtitle',
+        parent=styles['Heading2'],
+        fontSize=14,
         textColor=SICON_GREEN,
         spaceAfter=20,
         alignment=TA_CENTER,
@@ -41,51 +76,38 @@ def create_styles():
         parent=styles['Heading1'],
         fontSize=16,
         textColor=SICON_GREEN,
-        spaceBefore=20,
+        spaceBefore=15,
         spaceAfter=10,
-        borderWidth=0,
-        borderPadding=0,
-    ))
-    
-    styles.add(ParagraphStyle(
-        name='SiconSubheading',
-        parent=styles['Heading2'],
-        fontSize=12,
-        textColor=SICON_GRAY,
-        spaceBefore=10,
-        spaceAfter=5,
     ))
     
     styles.add(ParagraphStyle(
         name='SiconBody',
         parent=styles['Normal'],
         fontSize=10,
-        textColor=colors.black,
-        spaceAfter=5,
+        textColor=SICON_LIGHT_GRAY,
+        spaceAfter=6,
+        leading=14,
     ))
     
     styles.add(ParagraphStyle(
-        name='SiconCode',
-        parent=styles['Code'],
-        fontSize=9,
-        textColor=colors.black,
-        backColor=colors.Color(240/255, 240/255, 240/255),
+        name='SiconSmall',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=SICON_GRAY,
+    ))
+    
+    styles.add(ParagraphStyle(
+        name='SiconHighlight',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=SICON_GREEN,
+        backColor=SICON_DARK_GREEN,
     ))
     
     return styles
 
-
 def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any]) -> bytes:
-    """
-    Generate a PDF report from scan data.
-    
-    Args:
-        scan_data: The scan object with results
-        user_data: The user who requested the scan
-    
-    Returns:
-        PDF file as bytes
-    """
+    """Generate PDF report."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -99,270 +121,282 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any]) -
     styles = create_styles()
     story = []
     
-    # Header
-    story.append(Paragraph("S1C0N", styles['SiconTitle']))
-    story.append(Paragraph("Security Reconnaissance Report", styles['SiconSubheading']))
-    story.append(Spacer(1, 20))
+    # --- HEADER ---
+    try:
+        if os.path.exists(LOGO_PATH):
+            # Resize logic for logo
+            img = Image(LOGO_PATH, width=1.5*inch, height=1.5*inch)
+            img.hAlign = 'CENTER'
+            story.append(img)
+            story.append(Spacer(1, 10))
+        else:
+            story.append(Paragraph("S1C0N", styles['SiconTitle']))
+    except Exception:
+        story.append(Paragraph("S1C0N", styles['SiconTitle']))
+
+    story.append(Paragraph("SECURITY ASSESSMENT REPORT", styles['SiconSubtitle']))
+    story.append(HRFlowable(width="100%", thickness=1, color=SICON_GREEN, spaceBefore=5, spaceAfter=20))
     
-    # Horizontal line
-    story.append(HRFlowable(width="100%", thickness=2, color=SICON_GREEN, spaceBefore=10, spaceAfter=20))
-    
-    # Scan Information Table
-    scan_info = [
-        ["Report ID", f"#{scan_data.get('id', 'N/A')}"],
-        ["Target", scan_data.get('target', 'N/A')],
-        ["Scan Type", scan_data.get('scan_type', 'full').capitalize()],
-        ["Status", scan_data.get('status', 'N/A').upper()],
-        ["Requested By", user_data.get('username', 'Unknown')],
-        ["Started At", format_datetime(scan_data.get('started_at'))],
-        ["Completed At", format_datetime(scan_data.get('completed_at'))],
-        ["Generated At", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+    # --- SCAN INFO ---
+    info_data = [
+        ["TARGET", scan_data.get('target', 'N/A')],
+        ["SCAN ID", f"#{scan_data.get('id', 'N/A')}"],
+        ["DATE", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+        ["CLIENT", user_data.get('username', 'Unknown')],
     ]
     
-    info_table = Table(scan_info, colWidths=[120, 350])
+    info_table = Table(info_data, colWidths=[100, 350])
     info_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), colors.Color(240/255, 240/255, 240/255)),
-        ('TEXTCOLOR', (0, 0), (0, -1), colors.black),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (0, 0), (0, -1), SICON_GREEN),
+        ('TEXTCOLOR', (1, 0), (1, -1), SICON_WHITE),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.gray),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
     ]))
     story.append(info_table)
-    story.append(Spacer(1, 30))
-    
-    # Executive Summary
-    story.append(Paragraph("📋 Executive Summary", styles['SiconHeading']))
-    story.append(HRFlowable(width="100%", thickness=1, color=SICON_GREEN, spaceAfter=10))
-    
-    results = scan_data.get('results', {})
-    summary = generate_summary(results)
-    story.append(Paragraph(summary, styles['SiconBody']))
     story.append(Spacer(1, 20))
     
-    # WAF Detection Results
-    if 'waf' in results:
-        story.append(Paragraph("🛡️ WAF Detection", styles['SiconHeading']))
-        story.append(HRFlowable(width="100%", thickness=1, color=SICON_GREEN, spaceAfter=10))
-        waf = results['waf']
-        
-        waf_data = [
-            ["Status", "Protected" if waf.get('detected') else "Not Protected"],
-            ["WAF Name", waf.get('waf_name', 'None') or 'None'],
-            ["Vendor", waf.get('waf_vendor', 'N/A') or 'N/A'],
-        ]
-        waf_table = Table(waf_data, colWidths=[120, 350])
-        waf_table.setStyle(get_table_style(waf.get('detected')))
-        story.append(waf_table)
-        story.append(Spacer(1, 20))
+    # --- EXECUTIVE SUMMARY ---
+    story.append(Paragraph("EXECUTIVE SUMMARY", styles['SiconHeading']))
+    results = scan_data.get('results', {})
+    summary = generate_summary(results)
     
-    # Port Scan Results
-    if 'port' in results:
-        story.append(Paragraph("🔌 Port Scan Results", styles['SiconHeading']))
-        story.append(HRFlowable(width="100%", thickness=1, color=SICON_GREEN, spaceAfter=10))
-        port_data = results['port']
+    # Create a highlighted box for summary
+    story.append(Table(
+        [[Paragraph(summary, styles['SiconBody'])]],
+        colWidths=[450],
+        style=TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), SICON_DARK_GREEN),
+            ('BOX', (0, 0), (-1, -1), 1, SICON_GREEN),
+            ('LEFTPADDING', (0, 0), (-1, -1), 15),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 15),
+            ('TOPPADDING', (0, 0), (-1, -1), 15),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+        ])
+    ))
+    story.append(Spacer(1, 20))
+    
+    # --- RESULTS MODULES ---
+    
+    # 1. WAF
+    if 'waf' in results:
+        story.append(Paragraph("WAF DETECTION", styles['SiconHeading']))
+        waf = results['waf']
+        detected = waf.get('detected', False)
         
-        open_ports = port_data.get('open_ports', [])
-        if open_ports:
-            port_table_data = [["Port", "Protocol", "Service", "Version", "Risk"]]
-            for p in open_ports[:20]:  # Limit to 20
-                port_table_data.append([
-                    str(p.get('port', '')),
+        waf_status = [
+            ["Protection Status", "DETECTED" if detected else "NOT DETECTED"],
+            ["WAF Name", waf.get('waf_name', 'None') or 'N/A'],
+            ["Vendor", waf.get('waf_vendor', 'N/A') or 'N/A']
+        ]
+        
+        t = Table(waf_status, colWidths=[150, 300])
+        t.setStyle(get_dark_table_style(highlight_row=0 if detected else None))
+        story.append(t)
+        story.append(Spacer(1, 15))
+
+    # 2. PORTS
+    if 'port' in results:
+        story.append(Paragraph("OPEN PORTS & SERVICES", styles['SiconHeading']))
+        port_data = results['port']
+        ports = port_data.get('open_ports', [])
+        
+        if ports:
+            # Header
+            data = [["PORT", "PROTOCOL", "SERVICE", "VERSION", "RISK"]]
+            # Rows
+            for p in ports:
+                data.append([
+                    str(p.get('port')),
                     p.get('protocol', 'tcp'),
                     p.get('service', 'unknown'),
-                    p.get('version', '')[:30],
+                    p.get('version', '')[:25],
                     p.get('risk', 'low').upper()
                 ])
             
-            port_table = Table(port_table_data, colWidths=[60, 60, 80, 180, 80])
-            port_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), SICON_GREEN),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 9),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.gray),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ('TOPPADDING', (0, 0), (-1, -1), 6),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.Color(245/255, 245/255, 245/255)]),
-            ]))
-            story.append(port_table)
+            t = Table(data, colWidths=[50, 60, 80, 180, 80])
+            t.setStyle(get_dark_table_style(header=True))
+            story.append(t)
+            
+            # Risk legend
+            story.append(Spacer(1, 5))
+            if any(p.get('risk') == 'high' for p in ports):
+                story.append(Paragraph("⚠️ High risk ports detected! Immediate attention recommended.", 
+                                    ParagraphStyle('Warning', parent=styles['SiconBody'], textColor=colors.red)))
         else:
-            story.append(Paragraph("No open ports detected.", styles['SiconBody']))
-        story.append(Spacer(1, 20))
-    
-    # Subdomain Results
+            story.append(Paragraph("No open ports found.", styles['SiconBody']))
+        story.append(Spacer(1, 15))
+
+    # 3. SUBDOMAINS - IMPROVED LAYOUT
     if 'subdo' in results:
-        story.append(Paragraph("🌐 Subdomain Enumeration", styles['SiconHeading']))
-        story.append(HRFlowable(width="100%", thickness=1, color=SICON_GREEN, spaceAfter=10))
-        subdo_data = results['subdo']
+        story.append(Paragraph("SUBDOMAIN ENUMERATION", styles['SiconHeading']))
+        subdo = results['subdo']
+        subdomains = subdo.get('subdomains', [])
+        count = subdo.get('count', 0)
         
-        story.append(Paragraph(f"Total Subdomains Found: <b>{subdo_data.get('count', 0)}</b>", styles['SiconBody']))
+        story.append(Paragraph(f"Total Found: {count}", styles['SiconBody']))
         story.append(Spacer(1, 5))
         
-        subdomains = subdo_data.get('subdomains', [])
         if subdomains:
-            # Display as a compact list
-            sub_text = ", ".join([s.get('subdomain', s) if isinstance(s, dict) else s for s in subdomains[:30]])
-            story.append(Paragraph(f"<font size=8>{sub_text}</font>", styles['SiconBody']))
-        story.append(Spacer(1, 20))
-    
-    # CMS Detection
-    if 'cms' in results:
-        story.append(Paragraph("📦 CMS Detection", styles['SiconHeading']))
-        story.append(HRFlowable(width="100%", thickness=1, color=SICON_GREEN, spaceAfter=10))
-        cms = results['cms']
-        
-        cms_info = [
-            ["CMS Detected", "Yes" if cms.get('detected') else "No"],
-            ["CMS Name", cms.get('cms_name', 'None') or 'None'],
-            ["Version", cms.get('cms_version', 'Unknown') or 'Unknown'],
-            ["Confidence", (cms.get('confidence', 'N/A') or 'N/A').upper()],
-        ]
-        cms_table = Table(cms_info, colWidths=[120, 350])
-        cms_table.setStyle(get_table_style(cms.get('detected')))
-        story.append(cms_table)
-        story.append(Spacer(1, 20))
-    
-    # Technology Stack
-    if 'tech' in results:
-        story.append(Paragraph("⚙️ Technology Stack", styles['SiconHeading']))
-        story.append(HRFlowable(width="100%", thickness=1, color=SICON_GREEN, spaceAfter=10))
-        tech = results['tech']
-        
-        technologies = tech.get('technologies', [])
-        if technologies:
-            tech_list = ", ".join([t.get('name', t) if isinstance(t, dict) else t for t in technologies])
-            story.append(Paragraph(f"Detected Technologies: <b>{tech_list}</b>", styles['SiconBody']))
-        else:
-            story.append(Paragraph("No technologies detected.", styles['SiconBody']))
-        story.append(Spacer(1, 20))
-    
-    # Directory Scan
-    if 'dir' in results:
-        story.append(Paragraph("📁 Directory Scan", styles['SiconHeading']))
-        story.append(HRFlowable(width="100%", thickness=1, color=SICON_GREEN, spaceAfter=10))
-        dir_data = results['dir']
-        
-        directories = dir_data.get('directories', [])
-        if directories:
-            story.append(Paragraph(f"Total Directories Found: <b>{len(directories)}</b>", styles['SiconBody']))
+            # Format subdomains into a 2-column grid for better readability
+            # Filter just the names
+            names = [s.get('subdomain', s) if isinstance(s, dict) else s for s in subdomains]
             
-            dir_table_data = [["Status", "Path"]]
-            for d in directories[:20]:  # Limit to 20
-                dir_table_data.append([
-                    str(d.get('status', '')),
-                    d.get('path', '')[:60]
-                ])
+            # Chunk into pairs
+            rows = []
+            for i in range(0, len(names), 2):
+                c1 = names[i]
+                c2 = names[i+1] if i+1 < len(names) else ""
+                rows.append([c1, c2])
             
-            dir_table = Table(dir_table_data, colWidths=[60, 400])
-            dir_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), SICON_GREEN),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            # Limit rows to avoid huge report
+            if len(rows) > 50:
+                rows = rows[:50]
+                rows.append(["...", "..."])
+            
+            t = Table(rows, colWidths=[225, 225])
+            t.setStyle(TableStyle([
+                ('TEXTCOLOR', (0, 0), (-1, -1), SICON_LIGHT_GRAY),
+                ('FONTNAME', (0, 0), (-1, -1), 'Courier'),
                 ('FONTSIZE', (0, 0), (-1, -1), 9),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.gray),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ('TOPPADDING', (0, 0), (-1, -1), 2),
+                ('GRID', (0, 0), (-1, -1), 0.25, SICON_DARK_GREEN), # Subtle grid
+                ('BACKGROUND', (0, 0), (-1, -1), colors.Color(0.1, 0.1, 0.1)), # Slightly lighter than black
             ]))
-            story.append(dir_table)
+            story.append(t)
         else:
-            story.append(Paragraph("No directories found.", styles['SiconBody']))
-        story.append(Spacer(1, 20))
-    
+            story.append(Paragraph("No subdomains found.", styles['SiconBody']))
+        story.append(Spacer(1, 15))
+
+    # 4. CMS & TECH
+    if 'cms' in results or 'tech' in results:
+        story.append(Paragraph("TECHNOLOGY STACK", styles['SiconHeading']))
+        
+        tech_data = []
+        
+        # CMS
+        if 'cms' in results:
+            cms = results['cms']
+            if cms.get('detected'):
+                tech_data.append(["CMS", f"{cms.get('cms_name')} {cms.get('cms_version') or ''}"])
+        
+        # Tech
+        if 'tech' in results:
+            tech = results['tech']
+            for t in tech.get('technologies', []):
+                name = t.get('name', t) if isinstance(t, dict) else t
+                cat = t.get('category', 'Technology') if isinstance(t, dict) else 'Technology'
+                tech_data.append([cat.replace('_', ' ').title(), name])
+        
+        if tech_data:
+            t = Table(tech_data, colWidths=[150, 300])
+            t.setStyle(get_dark_table_style())
+            story.append(t)
+        else:
+             story.append(Paragraph("No specific technologies identified.", styles['SiconBody']))
+
+    # 5. DIRECTORIES
+    if 'dir' in results:
+        story.append(Paragraph("DIRECTORY SCAN", styles['SiconHeading']))
+        dir_data = results['dir']
+        dirs = dir_data.get('directories', [])
+        
+        if dirs:
+            data = [["STATUS", "PATH", "SEVERITY"]]
+            for d in dirs[:20]: # Limit for brevity
+                status_code = d.get('status', 0)
+                # Colorize status text
+                s_text = str(status_code)
+                severity = d.get('severity', 'info')
+                
+                data.append([s_text, d.get('path'), severity.upper()])
+            
+            t = Table(data, colWidths=[60, 300, 90])
+            t.setStyle(get_dark_table_style(header=True))
+            story.append(t)
+        else:
+            story.append(Paragraph("No interesting directories found.", styles['SiconBody']))
+
     # Footer
     story.append(Spacer(1, 30))
-    story.append(HRFlowable(width="100%", thickness=1, color=SICON_GRAY, spaceBefore=20, spaceAfter=10))
-    story.append(Paragraph(
-        f"<font size=8 color='gray'>Generated by S1C0N Security Reconnaissance Platform | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</font>",
-        ParagraphStyle('Footer', alignment=TA_CENTER)
-    ))
-    
-    doc.build(story)
+    story.append(HRFlowable(width="100%", thickness=1, color=SICON_GREEN))
+    story.append(Paragraph("CONFIDENTIAL - Generated by S1C0N", styles['SiconSmall']))
+
+    # Build with background
+    doc.build(story, onFirstPage=add_background, onLaterPages=add_background)
     buffer.seek(0)
     return buffer.getvalue()
 
 
-def format_datetime(dt) -> str:
-    """Format datetime for display."""
-    if not dt:
-        return "N/A"
-    if isinstance(dt, str):
-        try:
-            dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
-        except:
-            return dt
-    return dt.strftime("%Y-%m-%d %H:%M:%S")
+def get_dark_table_style(header=False, highlight_row=None):
+    """Common table style for dark theme."""
+    style = [
+        ('TEXTCOLOR', (0, 0), (-1, -1), SICON_LIGHT_GRAY),
+        ('GRID', (0, 0), (-1, -1), 0.5, SICON_GREEN),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.Color(0.05, 0.05, 0.05)), # Very dark grey
+    ]
+    
+    if header:
+        style.extend([
+            ('BACKGROUND', (0, 0), (-1, 0), SICON_GREEN), # Header row
+            ('TEXTCOLOR', (0, 0), (-1, 0), SICON_BLACK),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ])
+    
+    if highlight_row is not None:
+         style.extend([
+            ('TEXTCOLOR', (1, highlight_row), (1, highlight_row), SICON_GREEN),
+            ('FONTNAME', (1, highlight_row), (1, highlight_row), 'Helvetica-Bold'),
+        ])
 
-
-def get_table_style(is_positive: bool) -> TableStyle:
-    """Get table style based on detection status."""
-    return TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), colors.Color(240/255, 240/255, 240/255)),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.gray),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('LEFTPADDING', (0, 0), (-1, -1), 10),
-    ])
-
+    return TableStyle(style)
 
 def generate_summary(results: Dict[str, Any]) -> str:
-    """Generate executive summary from scan results."""
-    summary_parts = []
+    """Generate executive summary."""
+    parts = []
     
-    # WAF Summary
-    if 'waf' in results:
-        waf = results['waf']
-        if waf.get('detected'):
-            summary_parts.append(f"The target is protected by <b>{waf.get('waf_name', 'a WAF')}</b>.")
-        else:
-            summary_parts.append("The target does <b>not have WAF protection</b> detected.")
+    # High level risk assessment
+    risks = 0
     
-    # Port Summary
-    if 'port' in results:
-        port = results['port']
-        count = port.get('count', len(port.get('open_ports', [])))
-        high_risk = len([p for p in port.get('open_ports', []) if p.get('risk') == 'high'])
-        summary_parts.append(f"Found <b>{count} open ports</b>")
-        if high_risk > 0:
-            summary_parts[-1] += f" with <b>{high_risk} high-risk</b> services."
-        else:
-            summary_parts[-1] += "."
+    # Check WAF
+    waf = results.get('waf', {})
+    if waf.get('detected'):
+        parts.append(f"Target is protected by {waf.get('waf_name', 'WAF')}.")
+    else:
+        parts.append("Target appears UNPROTECTED (No WAF detected).")
+        risks += 1
     
-    # Subdomain Summary
-    if 'subdo' in results:
-        subdo = results['subdo']
-        count = subdo.get('count', 0)
-        summary_parts.append(f"Discovered <b>{count} subdomains</b> associated with the target.")
+    # Check Ports
+    port = results.get('port', {})
+    open_ports = port.get('open_ports', [])
+    high_risk_ports = [p for p in open_ports if p.get('risk') == 'high']
+    if high_risk_ports:
+        parts.append(f"CRITICAL: Found {len(high_risk_ports)} high-risk open ports.")
+        risks += 2
+    else:
+        parts.append(f"Found {len(open_ports)} open ports.")
+        
+    # Check Subdomains
+    subdo = results.get('subdo', {})
+    parts.append(f"Enumerated {subdo.get('count', 0)} subdomains.")
     
-    # CMS Summary
-    if 'cms' in results:
-        cms = results['cms']
-        if cms.get('detected'):
-            version = f" version {cms.get('cms_version')}" if cms.get('cms_version') else ""
-            summary_parts.append(f"Detected <b>{cms.get('cms_name')}{version}</b> as the content management system.")
-    
-    # Tech Summary
-    if 'tech' in results:
-        tech = results['tech']
-        count = tech.get('count', len(tech.get('technologies', [])))
-        if count > 0:
-            summary_parts.append(f"Identified <b>{count} technologies</b> in the stack.")
-    
-    # Directory Summary
-    if 'dir' in results:
-        dir_data = results['dir']
-        count = dir_data.get('count', len(dir_data.get('directories', [])))
-        if count > 0:
-            summary_parts.append(f"Found <b>{count} accessible directories</b>.")
-    
-    if not summary_parts:
-        return "No scan results available."
-    
-    return " ".join(summary_parts)
+    # CMS
+    cms = results.get('cms', {})
+    if cms.get('detected'):
+        parts.append(f"Running {cms.get('cms_name')}.")
+        
+    if risks >= 2:
+        parts.append("OVERALL STATUS: HIGH RISK TARGET.")
+    elif risks == 1:
+        parts.append("OVERALL STATUS: MODERATE RISK.")
+    else:
+        parts.append("OVERALL STATUS: LOW RISK OBSERVED.")
+        
+    return " ".join(parts)
