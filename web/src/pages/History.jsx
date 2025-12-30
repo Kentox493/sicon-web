@@ -1,19 +1,28 @@
-import React, { useState } from 'react';
-import { Search, Calendar, Filter, Eye, Download, Trash2, MoreVertical, RefreshCw } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/common/Card';
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Calendar, Filter, Eye, Download, Trash2, RefreshCw, Loader2 } from 'lucide-react';
+import { Card, CardHeader, CardContent } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
-import { Badge } from '../components/common/Badge';
+import { useScanStore } from '../store/scanStore';
 
 const History = () => {
-    // Mock Data
-    const scans = [
-        { id: 1, target: 'example.com', type: 'Full Scan', status: 'completed', date: '2024-12-30', duration: '5m' },
-        { id: 2, target: 'test-site.org', type: 'WAF Only', status: 'completed', date: '2024-12-29', duration: '2m' },
-        { id: 3, target: 'shop.local', type: 'Full Scan', status: 'failed', date: '2024-12-29', duration: '1m' },
-        { id: 4, target: 'api.dev.io', type: 'Subdomain', status: 'running', date: '2024-12-30', duration: '-' },
-        { id: 5, target: 'corp.net', type: 'Port Scan', status: 'completed', date: '2024-12-28', duration: '8m' },
-    ];
+    const navigate = useNavigate();
+    const { scans, fetchScans, deleteScan, isLoading } = useScanStore();
+
+    useEffect(() => {
+        fetchScans();
+    }, [fetchScans]);
+
+    const handleView = (scanId) => {
+        navigate(`/scan?id=${scanId}`);
+    };
+
+    const handleDelete = async (scanId) => {
+        if (window.confirm('Are you sure you want to delete this scan?')) {
+            await deleteScan(scanId);
+        }
+    };
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -22,9 +31,9 @@ const History = () => {
                     <h1 className="text-3xl font-bold text-text-primary">Scan History</h1>
                     <p className="text-text-secondary mt-1">Review and manage your past reconnaissance activities.</p>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="secondary"><Download className="w-4 h-4 mr-2" /> Export All</Button>
-                </div>
+                <Button variant="secondary" onClick={() => fetchScans()}>
+                    <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
+                </Button>
             </div>
 
             <Card className="border-accent-primary/20">
@@ -39,50 +48,55 @@ const History = () => {
                     </div>
                 </CardHeader>
                 <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-background-tertiary text-text-secondary uppercase text-xs font-semibold">
-                                <tr>
-                                    <th className="px-6 py-4">Target</th>
-                                    <th className="px-6 py-4">Scan Type</th>
-                                    <th className="px-6 py-4">Status</th>
-                                    <th className="px-6 py-4">Date</th>
-                                    <th className="px-6 py-4">Duration</th>
-                                    <th className="px-6 py-4 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/50">
-                                {scans.map((scan) => (
-                                    <tr key={scan.id} className="hover:bg-background-tertiary/50 transition-colors group">
-                                        <td className="px-6 py-4 font-medium text-text-primary">{scan.target}</td>
-                                        <td className="px-6 py-4 text-text-secondary">{scan.type}</td>
-                                        <td className="px-6 py-4">
-                                            <StatusBadge status={scan.status} />
-                                        </td>
-                                        <td className="px-6 py-4 text-text-secondary">{scan.date}</td>
-                                        <td className="px-6 py-4 text-text-secondary font-mono">{scan.duration}</td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-accent-primary"><Eye className="w-4 h-4" /></Button>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-accent-primary"><RefreshCw className="w-4 h-4" /></Button>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-status-danger"><Trash2 className="w-4 h-4" /></Button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div className="p-4 border-t border-border flex justify-center">
-                        <div className="flex gap-2">
-                            <Button variant="ghost" size="sm" disabled>Previous</Button>
-                            <Button variant="ghost" size="sm" className="bg-accent-primary/10 text-accent-primary">1</Button>
-                            <Button variant="ghost" size="sm">2</Button>
-                            <Button variant="ghost" size="sm">3</Button>
-                            <Button variant="ghost" size="sm">Next</Button>
+                    {isLoading && scans.length === 0 ? (
+                        <div className="flex items-center justify-center py-12">
+                            <Loader2 className="w-6 h-6 animate-spin text-accent-primary" />
                         </div>
-                    </div>
+                    ) : scans.length === 0 ? (
+                        <div className="text-center py-12 text-text-secondary">
+                            No scans found. Start a new scan from the Dashboard.
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-background-tertiary text-text-secondary uppercase text-xs font-semibold">
+                                    <tr>
+                                        <th className="px-6 py-4">ID</th>
+                                        <th className="px-6 py-4">Target</th>
+                                        <th className="px-6 py-4">Type</th>
+                                        <th className="px-6 py-4">Status</th>
+                                        <th className="px-6 py-4">Date</th>
+                                        <th className="px-6 py-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/50">
+                                    {scans.map((scan) => (
+                                        <tr key={scan.id} className="hover:bg-background-tertiary/50 transition-colors group">
+                                            <td className="px-6 py-4 font-mono text-text-secondary">#{scan.id}</td>
+                                            <td className="px-6 py-4 font-medium text-text-primary">{scan.target}</td>
+                                            <td className="px-6 py-4 text-text-secondary capitalize">{scan.scan_type}</td>
+                                            <td className="px-6 py-4">
+                                                <StatusBadge status={scan.status} />
+                                            </td>
+                                            <td className="px-6 py-4 text-text-secondary">
+                                                {new Date(scan.created_at).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-accent-primary" onClick={() => handleView(scan.id)}>
+                                                        <Eye className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-status-danger" onClick={() => handleDelete(scan.id)}>
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>
@@ -93,11 +107,12 @@ const StatusBadge = ({ status }) => {
     const styles = {
         completed: 'bg-status-success/10 text-status-success border-status-success/20',
         running: 'bg-status-warning/10 text-status-warning border-status-warning/20',
+        pending: 'bg-accent-primary/10 text-accent-primary border-accent-primary/20',
         failed: 'bg-status-danger/10 text-status-danger border-status-danger/20',
     };
 
     return (
-        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${styles[status]}`}>
+        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${styles[status] || styles.pending}`}>
             {status.charAt(0).toUpperCase() + status.slice(1)}
         </span>
     );

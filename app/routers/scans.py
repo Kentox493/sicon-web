@@ -3,12 +3,12 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
 
-from app.core.database import get_db
-from app.core.security import get_current_user
-from app.models.user import User
-from app.models.scan import Scan
-from app.schemas.scan import ScanCreate, ScanResponse, ScanListResponse
-from app.services.scanner import run_scan_task
+from core.database import get_db
+from core.security import get_current_user
+from models.user import User
+from models.scan import Scan
+from schemas.scan import ScanCreate, ScanResponse, ScanListResponse
+from services.scanner import run_scan_task
 
 router = APIRouter(prefix="/api/scans", tags=["Scans"])
 
@@ -20,7 +20,6 @@ async def create_scan(
     current_user: User = Depends(get_current_user)
 ):
     """Start a new scan"""
-    # Create scan record
     db_scan = Scan(
         user_id=current_user.id,
         target=scan_data.target,
@@ -36,7 +35,6 @@ async def create_scan(
     db.commit()
     db.refresh(db_scan)
     
-    # Start background scan task
     background_tasks.add_task(run_scan_task, db_scan.id, scan_data.options.model_dump())
     
     return db_scan

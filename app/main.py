@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import json
 
-from app.core.config import settings
-from app.core.database import engine, Base
-from app.routers import auth, scans
+from core.config import settings
+from core.database import engine, Base
+from routers import auth, scans
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -72,9 +72,7 @@ async def websocket_endpoint(websocket: WebSocket, scan_id: int):
     await manager.connect(websocket, scan_id)
     try:
         while True:
-            # Keep connection alive and wait for client messages
             data = await websocket.receive_text()
-            # Echo back for now
             await websocket.send_text(f"Received: {data}")
     except WebSocketDisconnect:
         manager.disconnect(websocket, scan_id)
