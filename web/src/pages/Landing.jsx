@@ -21,8 +21,7 @@ const Landing = () => {
             <header className="fixed top-0 w-full z-50 bg-background-primary/80 backdrop-blur-md border-b border-border/10">
                 <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <img src={logo} alt="S1C0N" className="h-8 w-auto" />
-                        <span className="font-mono font-bold text-xl tracking-wider text-accent-primary">S1C0N</span>
+                        <img src={logo} alt="S1C0N" className="h-10 w-auto" />
                     </div>
                     <div className="flex items-center gap-4">
                         <Link to="/login">
@@ -50,19 +49,19 @@ const Landing = () => {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-primary opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-primary"></span>
                         </span>
-                        v2.0 AI-Powered Reconnaissance
+                        v2.0 AI-Enhanced Reporting
                     </div>
 
                     <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-8 leading-tight">
                         Advanced Reconnaissance <br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-primary via-accent-secondary to-accent-primary bg-300% animate-gradient">
-                            At Your Fingertips
+                            With Intelligent Analysis
                         </span>
                     </h1>
 
                     <p className="text-xl md:text-2xl text-text-secondary max-w-2xl mx-auto mb-12 leading-relaxed">
-                        Automate your security assessments with AI-driven insights.
-                        Detect WAFs, ports, subdomains, and vulnerabilities in seconds.
+                        Automate your security assessments finding WAFs, ports, and subdomains.
+                        Let AI analyze the results to generate actionable executive reports.
                     </p>
 
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -87,19 +86,20 @@ const Landing = () => {
                             <div className="ml-4 font-mono text-xs text-text-secondary">s1c0n-cli — scan — 80x24</div>
                         </div>
                         <div className="p-6 font-mono text-sm text-left overflow-hidden">
-                            <div className="text-accent-primary mb-2">$ s1c0n scan target.com --ai-analysis</div>
+                            <div className="text-accent-primary mb-2">$ s1c0n scan target.com --generate-report</div>
                             <div className="text-text-secondary">
                                 <span className="text-green-400">✔</span> Target resolved: 104.21.55.2<br />
                                 <span className="text-green-400">✔</span> WAF Detected: Cloudflare (Confidence: 99%)<br />
                                 <span className="text-green-400">✔</span> 12 Open Ports Discovered<br />
                                 <span className="text-green-400">✔</span> 45 Subdomains Enumerated<br />
-                                <span className="text-green-400">✔</span> AI Analysis running...<br />
+                                <span className="text-green-400">✔</span> Generating PDF Report...<br />
                             </div>
                             <div className="mt-4 p-4 bg-accent-primary/5 border-l-2 border-accent-primary rounded-r">
-                                <span className="text-accent-primary font-bold">AI INSIGHT:</span><br />
-                                Critical misconfiguration detected on admin-stg.target.com.
-                                Exposed git directory could lead to source code leakage.
-                                CVE-2023-XXXX potential match.
+                                <span className="text-accent-primary font-bold">REPORT GENERATED:</span><br />
+                                AI Analysis of scan results complete.
+                                - 3 Critical findings highlighted
+                                - CVE correlations identified
+                                - Executive summary created
                             </div>
                         </div>
                     </div>
@@ -120,8 +120,8 @@ const Landing = () => {
                         {[
                             {
                                 icon: <Cpu className="w-8 h-8" />,
-                                title: "AI-Powered Analysis",
-                                desc: "Leverage Gemini 2.5 Flash to correlate findings, identify complex vulnerabilities, and generate executive summaries automatically."
+                                title: "AI-Enhanced Reporting",
+                                desc: "Leverage Gemini 2.5 Flash to analyze scan results, correlate findings, and generate professional executive summaries."
                             },
                             {
                                 icon: <Shield className="w-8 h-8" />,
