@@ -81,8 +81,9 @@ def add_cover_background(canvas, doc):
 
 def create_styles():
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle('CoverTitle', fontName='Helvetica-Bold', fontSize=32, textColor=WHITE, alignment=TA_CENTER, spaceAfter=20, leading=38))
-    styles.add(ParagraphStyle('CoverSubtitle', fontName='Courier', fontSize=14, textColor=GREEN, alignment=TA_CENTER, spaceAfter=40, spaceBefore=10))
+    # Updated text styles for better theme matching
+    styles.add(ParagraphStyle('CoverTitle', fontName='Courier-Bold', fontSize=26, textColor=GREEN, alignment=TA_CENTER, spaceAfter=20, leading=32))
+    styles.add(ParagraphStyle('CoverSubtitle', fontName='Courier', fontSize=14, textColor=WHITE, alignment=TA_CENTER, spaceAfter=40, spaceBefore=5))
     styles.add(ParagraphStyle('CoverLabel', fontName='Courier-Bold', fontSize=10, textColor=GREEN, alignment=TA_CENTER))
     styles.add(ParagraphStyle('CoverValue', fontName='Courier', fontSize=12, textColor=WHITE, alignment=TA_CENTER, spaceAfter=15))
     
@@ -113,14 +114,18 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
             img = Image(LOGO_PATH, width=4*inch, height=2*inch, kind='proportional')
             img.hAlign = 'CENTER'
             story.append(img)
-            story.append(Spacer(1, 20*mm))
+            story.append(Spacer(1, 15*mm))
     except:
         pass
         
-    story.append(Paragraph("SECURITY ASSESSMENT REPORT", styles['CoverTitle']))
-    story.append(Paragraph("AI-ENHANCED RECONNAISSANCE", styles['CoverSubtitle']))
+    # Decorative terminal-style separator
+    story.append(Paragraph("/// SYSTEM_REPORT_GENERATED ///", styles['SSmall']))
+    story.append(Spacer(1, 10))
     
-    story.append(Spacer(1, 20*mm))
+    story.append(Paragraph("SECURITY ASSESSMENT", styles['CoverTitle']))
+    story.append(Paragraph("[ CONFIDENTIAL REPORT ]", styles['CoverSubtitle']))
+    
+    story.append(Spacer(1, 15*mm))
     
     # Scan Details Block
     target = scan_data.get('target', 'N/A').upper()
@@ -312,6 +317,33 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
             tt.setStyle(simple_table_style(header=True))
             story.append(tt)
         story.append(Spacer(1, 15))
+
+    # Directories
+    if 'dir' in results:
+        dirs = results['dir'].get('directories', [])
+        if dirs:
+            story.append(Paragraph(f"DIRECTORIES ({len(dirs)})", styles['SHeading']))
+            
+            # Limit and chunk
+            max_dirs = min(len(dirs), 30)
+            for chunk_start in range(0, max_dirs, 15):
+                chunk = dirs[chunk_start:chunk_start+15]
+                dd = [["Status", "Path", "Severity"]]
+                for d in chunk:
+                    dd.append([
+                        str(d.get('status', '?')),
+                        str(d.get('path', ''))[:45],
+                        str(d.get('severity', 'info')).upper()
+                    ])
+                dt = Table(dd, colWidths=[60, 330, 90])
+                dt.setStyle(simple_table_style(header=(chunk_start == 0)))
+                story.append(dt)
+                if chunk_start + 15 < max_dirs:
+                    story.append(Spacer(1, 4))
+            
+            if len(dirs) > 30:
+                story.append(Paragraph(f"... and {len(dirs) - 30} more directories", styles['SSmall']))
+            story.append(Spacer(1, 15))
 
     # Footer
     story.append(Spacer(1, 20))
