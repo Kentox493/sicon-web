@@ -345,6 +345,85 @@ def generate_scan_report(scan_data: Dict[str, Any], user_data: Dict[str, Any],
                 story.append(Paragraph(f"... and {len(dirs) - 30} more directories", styles['SSmall']))
             story.append(Spacer(1, 15))
 
+    # WordPress Enumeration
+    if 'wp' in results:
+        wp = results['wp']
+        if wp.get('wordpress_detected'):
+            story.append(Paragraph("WORDPRESS ENUMERATION", styles['SHeading']))
+            
+            # WP Info table
+            wp_info = [
+                ["Property", "Value"],
+                ["WordPress Detected", "Yes"],
+                ["Version", wp.get('version', 'Unknown') or 'Unknown'],
+            ]
+            wpt = Table(wp_info, colWidths=[120, 360])
+            wpt.setStyle(simple_table_style(header=True))
+            story.append(wpt)
+            story.append(Spacer(1, 10))
+            
+            # Plugins
+            plugins = wp.get('plugins', [])
+            if plugins:
+                story.append(Paragraph(f"Plugins ({len(plugins)})", styles['SBody']))
+                pd = [["Plugin", "Version", "Outdated", "Vulns"]]
+                for p in plugins[:15]:
+                    pd.append([
+                        str(p.get('name', ''))[:30],
+                        str(p.get('version', '?'))[:15],
+                        "Yes" if p.get('outdated') else "No",
+                        str(p.get('vulnerabilities', 0))
+                    ])
+                pt = Table(pd, colWidths=[180, 100, 80, 60])
+                pt.setStyle(simple_table_style(header=True))
+                story.append(pt)
+                story.append(Spacer(1, 8))
+            
+            # Themes
+            themes = wp.get('themes', [])
+            if themes:
+                story.append(Paragraph(f"Themes ({len(themes)})", styles['SBody']))
+                td = [["Theme", "Version", "Outdated"]]
+                for t in themes[:10]:
+                    td.append([
+                        str(t.get('name', ''))[:40],
+                        str(t.get('version', '?'))[:15],
+                        "Yes" if t.get('outdated') else "No"
+                    ])
+                tt = Table(td, colWidths=[250, 100, 80])
+                tt.setStyle(simple_table_style(header=True))
+                story.append(tt)
+                story.append(Spacer(1, 8))
+            
+            # Users
+            users = wp.get('users', [])
+            if users:
+                story.append(Paragraph(f"Enumerated Users ({len(users)})", styles['SBody']))
+                ud = [["ID", "Username"]]
+                for u in users[:20]:
+                    ud.append([str(u.get('id', '?')), str(u.get('username', ''))[:40]])
+                ut = Table(ud, colWidths=[60, 420])
+                ut.setStyle(simple_table_style(header=True))
+                story.append(ut)
+                story.append(Spacer(1, 8))
+            
+            # Vulnerabilities
+            vulns = wp.get('vulnerabilities', [])
+            if vulns:
+                story.append(Paragraph(f"Known Vulnerabilities ({len(vulns)})", styles['SBody']))
+                vd = [["Component", "Title", "Severity"]]
+                for v in vulns[:10]:
+                    vd.append([
+                        str(v.get('component', ''))[:25],
+                        str(v.get('title', ''))[:35],
+                        str(v.get('severity', 'medium')).upper()
+                    ])
+                vt = Table(vd, colWidths=[120, 280, 80])
+                vt.setStyle(simple_table_style(header=True))
+                story.append(vt)
+            
+            story.append(Spacer(1, 15))
+
     # Footer
     story.append(Spacer(1, 20))
     story.append(HRFlowable(width="100%", thickness=0.5, color=GREEN))
