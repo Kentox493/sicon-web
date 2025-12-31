@@ -472,11 +472,14 @@ def run_cms_detection(target: str, proxy: Optional[str] = None, user_agent: Opti
     return result
 
 # =============================================================================
-# TECHNOLOGY DETECTION - Clean Output
+# TECHNOLOGY DETECTION - Integrated with Core techscan.py (builtwith)
 # =============================================================================
 
 def run_tech_detection(target: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Dict[str, Any]:
-    """Detect web technologies with categorized output."""
+    """
+    Detect web technologies using builtwith library + header analysis.
+    Integrates logic from scan/techscan.py for comprehensive detection.
+    """
     result = {
         "technologies": [],
         "categories": {},
@@ -489,64 +492,105 @@ def run_tech_detection(target: str, proxy: Optional[str] = None, user_agent: Opt
         headers = {"User-Agent": user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         proxies = {"http": proxy, "https": proxy} if proxy else None
         
+        # Try HTTPS first, fallback to HTTP
         url = f"https://{target}"
         try:
-            resp = requests.get(url, headers=headers, timeout=15, proxies=proxies, verify=False)
+            resp = requests.get(url, headers=headers, timeout=20, proxies=proxies, verify=False, allow_redirects=True)
         except:
             url = f"http://{target}"
-            resp = requests.get(url, headers=headers, timeout=15, proxies=proxies, verify=False)
+            resp = requests.get(url, headers=headers, timeout=20, proxies=proxies, verify=False, allow_redirects=True)
         
-        text = resp.text
         found_tech = []
         categories = {
-            "web_server": [],
-            "programming": [],
-            "javascript": [],
-            "css_framework": [],
-            "analytics": [],
+            "web-servers": [],
+            "programming-language": [],
+            "javascript-frameworks": [],
+            "web-frameworks": [],
+            "cms": [],
             "cdn": [],
+            "analytics": [],
+            "css-frameworks": [],
             "other": []
         }
         
-        # Server header
+        # === 1. Use builtwith library (core techscan.py logic) ===
+        try:
+            import builtwith
+            bw_data = builtwith.builtwith(url)
+            
+            # Extract key categories (same as core techscan.py)
+            keys_of_interest = ['programming-language', 'cms', 'web-servers', 'javascript-frameworks', 'web-frameworks', 'cdn']
+            
+            for key in keys_of_interest:
+                if key in bw_data:
+                    for tech in bw_data[key]:
+                        cat_key = key if key in categories else "other"
+                        if not any(t["name"] == tech for t in found_tech):
+                            found_tech.append({"name": tech, "category": cat_key, "source": "builtwith"})
+                            categories[cat_key].append(tech)
+        except ImportError:
+            pass  # builtwith not installed, continue with other methods
+        except Exception:
+            pass  # builtwith failed, continue
+        
+        # === 2. Check Laravel cookies (core techscan.py logic) ===
+        laravel_cookies = ['XSRF-TOKEN', 'laravel_session']
+        for cookie in laravel_cookies:
+            if cookie in resp.cookies:
+                if not any(t["name"] == "Laravel" for t in found_tech):
+                    found_tech.append({"name": "Laravel", "category": "web-frameworks", "source": "cookie"})
+                    categories["web-frameworks"].append("Laravel")
+                break
+        
+        # === 3. HTTP Headers Analysis ===
         server = resp.headers.get('Server', '')
         if server:
             result["headers"]["Server"] = server
             if 'nginx' in server.lower():
-                found_tech.append({"name": "nginx", "version": server, "category": "web_server"})
-                categories["web_server"].append("nginx")
+                if not any(t["name"] == "nginx" for t in found_tech):
+                    found_tech.append({"name": "nginx", "version": server, "category": "web-servers"})
+                    categories["web-servers"].append("nginx")
             elif 'apache' in server.lower():
-                found_tech.append({"name": "Apache", "version": server, "category": "web_server"})
-                categories["web_server"].append("Apache")
+                if not any(t["name"] == "Apache" for t in found_tech):
+                    found_tech.append({"name": "Apache", "version": server, "category": "web-servers"})
+                    categories["web-servers"].append("Apache")
             elif 'cloudflare' in server.lower():
-                found_tech.append({"name": "Cloudflare", "category": "cdn"})
-                categories["cdn"].append("Cloudflare")
+                if not any(t["name"] == "Cloudflare" for t in found_tech):
+                    found_tech.append({"name": "Cloudflare", "category": "cdn"})
+                    categories["cdn"].append("Cloudflare")
+            elif 'LiteSpeed' in server:
+                if not any(t["name"] == "LiteSpeed" for t in found_tech):
+                    found_tech.append({"name": "LiteSpeed", "version": server, "category": "web-servers"})
+                    categories["web-servers"].append("LiteSpeed")
         
-        # X-Powered-By
         powered = resp.headers.get('X-Powered-By', '')
         if powered:
             result["headers"]["X-Powered-By"] = powered
-            found_tech.append({"name": powered, "category": "programming"})
-            categories["programming"].append(powered)
+            if not any(t["name"] == powered for t in found_tech):
+                found_tech.append({"name": powered, "category": "programming-language", "source": "header"})
+                categories["programming-language"].append(powered)
         
-        # Content analysis
+        # === 4. Content Pattern Analysis (fallback) ===
+        text = resp.text
         tech_patterns = {
-            ("jQuery", "javascript"): r'jquery[.\-]?\d*\.?\d*\.?(min\.)?js',
-            ("Bootstrap", "css_framework"): r'bootstrap[.\-]?\d*\.?(min\.)?css',
-            ("React", "javascript"): r'react[.\-]?dom|__REACT|_react',
-            ("Vue.js", "javascript"): r'vue[.\-]?\d*\.?\d*\.?min\.js|v-if=|v-for=',
-            ("Angular", "javascript"): r'angular[.\-]?\d*\.?min\.js|ng-app|ng-controller',
-            ("Tailwind CSS", "css_framework"): r'tailwindcss|tailwind\.min\.css',
-            ("Font Awesome", "css_framework"): r'font-?awesome|fa-[a-z]+-',
+            ("jQuery", "javascript-frameworks"): r'jquery[.\-]?\d*\.?\d*\.?(min\.)?js',
+            ("Bootstrap", "css-frameworks"): r'bootstrap[.\-]?\d*\.?(min\.)?css',
+            ("React", "javascript-frameworks"): r'react[.\-]?dom|__REACT|_react',
+            ("Vue.js", "javascript-frameworks"): r'vue[.\-]?\d*\.?\d*\.?min\.js|v-if=|v-for=',
+            ("Angular", "javascript-frameworks"): r'angular[.\-]?\d*\.?min\.js|ng-app|ng-controller',
+            ("Tailwind CSS", "css-frameworks"): r'tailwindcss|tailwind\.min\.css',
+            ("Font Awesome", "css-frameworks"): r'font-?awesome|fa-[a-z]+-',
             ("Google Analytics", "analytics"): r'google-analytics\.com/analytics|gtag\s*\(',
             ("Google Tag Manager", "analytics"): r'googletagmanager\.com/gtm',
-            ("Cloudflare", "cdn"): r'cdnjs\.cloudflare\.com|cloudflare\.com',
+            ("WordPress", "cms"): r'/wp-content/|/wp-includes/',
+            ("Drupal", "cms"): r'/sites/default/files|Drupal\.settings',
+            ("Joomla", "cms"): r'/media/jui/|/components/com_',
         }
         
         for (tech, cat), pattern in tech_patterns.items():
             if re.search(pattern, text, re.IGNORECASE):
                 if not any(t["name"] == tech for t in found_tech):
-                    found_tech.append({"name": tech, "category": cat})
+                    found_tech.append({"name": tech, "category": cat, "source": "pattern"})
                     categories[cat].append(tech)
         
         result["technologies"] = found_tech
@@ -554,6 +598,9 @@ def run_tech_detection(target: str, proxy: Optional[str] = None, user_agent: Opt
         result["count"] = len(found_tech)
         result["url"] = url
         
+    except requests.RequestException as e:
+        result["status"] = "error"
+        result["error"] = f"Connection failed: {str(e)}"
     except Exception as e:
         result["status"] = "error"
         result["error"] = str(e)
