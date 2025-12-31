@@ -4,6 +4,7 @@ import { Card, CardHeader, CardContent } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Badge } from '../components/common/Badge';
+import { ConfirmModal } from '../components/common/Modal';
 import { scansAPI, reportsAPI, settingsAPI } from '../services/api';
 
 const Reports = () => {
@@ -13,6 +14,11 @@ const Reports = () => {
     const [generating, setGenerating] = useState(null);
     const [downloading, setDownloading] = useState(null);
     const [hasAiKey, setHasAiKey] = useState(false);
+
+    // Delete state
+    const [deleteId, setDeleteId] = useState(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -67,15 +73,23 @@ const Reports = () => {
         setDownloading(null);
     };
 
-    const handleDelete = async (reportId) => {
-        if (!window.confirm('Are you sure you want to delete this report?')) return;
-
+    const confirmDelete = async () => {
+        if (!deleteId) return;
+        setIsDeleting(true);
         try {
-            await reportsAPI.delete(reportId);
-            setReports(reports.filter(r => r.id !== reportId));
+            await reportsAPI.delete(deleteId);
+            setReports(reports.filter(r => r.id !== deleteId));
         } catch (error) {
             console.error('Failed to delete report:', error);
         }
+        setIsDeleting(false);
+        setShowDeleteConfirm(false);
+        setDeleteId(null);
+    };
+
+    const handleDeleteClick = (reportId) => {
+        setDeleteId(reportId);
+        setShowDeleteConfirm(true);
     };
 
     const formatFileSize = (bytes) => {
@@ -94,6 +108,17 @@ const Reports = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
+            <ConfirmModal
+                isOpen={showDeleteConfirm}
+                onClose={() => setShowDeleteConfirm(false)}
+                onConfirm={confirmDelete}
+                title="Delete Report"
+                message="Are you sure you want to delete this report? This action cannot be undone."
+                confirmText="Delete"
+                isDanger
+                isLoading={isDeleting}
+            />
+
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-text-primary">Reports</h1>
@@ -228,7 +253,7 @@ const Reports = () => {
                                             variant="ghost"
                                             size="icon"
                                             className="opacity-0 group-hover:opacity-100 hover:text-status-danger"
-                                            onClick={() => handleDelete(report.id)}
+                                            onClick={() => handleDeleteClick(report.id)}
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </Button>
