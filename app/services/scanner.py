@@ -164,11 +164,14 @@ def run_module(module: str, target: str, options: Dict[str, Any]) -> Dict[str, A
     return {"status": "unknown_module"}
 
 # =============================================================================
-# WAF DETECTION - Clean Output
+# WAF DETECTION - Integrated with Core wafscan.py
 # =============================================================================
 
 def run_waf_scan(target: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Dict[str, Any]:
-    """Run WAF detection using wafw00f with clean parsed output."""
+    """
+    Run WAF detection using wafw00f with proper URL probing.
+    Integrates logic from scan/wafscan.py for accurate detection.
+    """
     result = {
         "detected": False,
         "waf_name": None,
@@ -178,33 +181,59 @@ def run_waf_scan(target: str, proxy: Optional[str] = None, user_agent: Optional[
     }
     
     try:
-        # Try HTTPS first
-        host = f"https://{target}"
+        # Step 1: Use httprobe to get proper URL (like core wafscan.py does)
+        # This ensures we're testing the correct protocol (http/https)
+        try:
+            httprobe_cmd = f"echo {target} | httprobe -prefer-https"
+            host = subprocess.check_output(httprobe_cmd, shell=True, text=True, timeout=30).strip()
+            if not host:
+                # Fallback to https if httprobe fails
+                host = f"https://{target}"
+        except:
+            # Fallback to trying both protocols
+            host = f"https://{target}"
         
-        cmd = ["wafw00f", host, "-o", "-"]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        output = proc.stdout + proc.stderr
+        result["target"] = host
         
-        # Parse output
-        if "is behind" in output:
-            # Extract: "The site https://example.com is behind Cloudflare (Cloudflare Inc.)"
-            match = re.search(r'is behind\s+(.+?)\s*(?:\(([^)]+)\))?(?:\s|$)', output)
+        # Step 2: Run wafw00f on the probed URL
+        waf_cmd = f"wafw00f {host}"
+        waf_output = subprocess.check_output(waf_cmd, shell=True, text=True, timeout=60)
+        
+        # Step 3: Parse output (matching core wafscan.py logic)
+        if "is behind" in waf_output:
+            # Extract: "is behind <WAF_NAME> (<VENDOR>)"
+            match = re.search(r'is behind\s+(.+?)\s*\(([^)]+)\)', waf_output)
             if match:
                 result["detected"] = True
                 result["waf_name"] = match.group(1).strip()
-                result["waf_vendor"] = match.group(2).strip() if match.group(2) else None
-        elif "No WAF" in output or "seems to be unprotected" in output:
+                result["waf_vendor"] = match.group(2).strip()
+            else:
+                # Try without vendor in parentheses
+                match = re.search(r'is behind\s+(.+?)(?:\s|$|\n)', waf_output)
+                if match:
+                    result["detected"] = True
+                    result["waf_name"] = match.group(1).strip()
+        elif "No WAF" in waf_output or "seems to be unprotected" in waf_output:
             result["detected"] = False
-            result["waf_name"] = "None"
-        
-        result["target"] = host
+            result["waf_name"] = None
+        elif "could not be resolved" in waf_output.lower():
+            result["status"] = "error"
+            result["error"] = "Target could not be resolved"
         
     except subprocess.TimeoutExpired:
         result["status"] = "timeout"
         result["error"] = "Scan timed out after 60 seconds"
+    except subprocess.CalledProcessError as e:
+        # wafw00f exits with non-zero for unprotected sites sometimes
+        output = str(e.output) if hasattr(e, 'output') else ""
+        if "No WAF" in output or "not detected" in output.lower():
+            result["detected"] = False
+        else:
+            result["status"] = "error"
+            result["error"] = f"WAF scan failed: {str(e)}"
     except FileNotFoundError:
         result["status"] = "error"
-        result["error"] = "wafw00f not installed. Run: sudo apt install wafw00f"
+        result["error"] = "wafw00f or httprobe not installed"
     except Exception as e:
         result["status"] = "error"
         result["error"] = str(e)
