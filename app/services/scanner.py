@@ -610,11 +610,14 @@ def run_directory_scan(target: str, proxy: Optional[str] = None, user_agent: Opt
     return result
 
 # =============================================================================
-# WORDPRESS ENUMERATION - Clean Output
+# WORDPRESS ENUMERATION - Integrated with Core WP Modules
 # =============================================================================
 
 def run_wp_enum(target: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Dict[str, Any]:
-    """Run WordPress enumeration with clean parsed output."""
+    """
+    Run WordPress enumeration using core logic from scan/wp modules.
+    Discovers plugins, extracts versions, checks for outdated status, and finds vulnerabilities.
+    """
     result = {
         "wordpress_detected": False,
         "version": None,
@@ -627,68 +630,176 @@ def run_wp_enum(target: str, proxy: Optional[str] = None, user_agent: Optional[s
     }
     
     try:
+        headers = {
+            "User-Agent": user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        proxies = {"http": proxy, "https": proxy} if proxy else None
+        
+        # Try HTTPS first, fallback to HTTP
         url = f"https://{target}"
-        cmd = ["wpscan", "--url", url, "--enumerate", "vp,vt,u", "--format", "json", "--random-user-agent"]
-        
-        if proxy:
-            cmd.extend(["--proxy", sanitize_command_arg(proxy)])
-        
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-        
         try:
-            data = json.loads(proc.stdout)
+            resp = requests.get(url, headers=headers, timeout=15, proxies=proxies, verify=False, allow_redirects=True)
+        except:
+            url = f"http://{target}"
+            resp = requests.get(url, headers=headers, timeout=15, proxies=proxies, verify=False, allow_redirects=True)
+        
+        page_content = resp.text
+        
+        # Check if WordPress
+        wp_indicators = ['/wp-content/', '/wp-includes/', 'wp-json', 'WordPress']
+        is_wp = any(ind in page_content for ind in wp_indicators)
+        
+        if not is_wp:
+            result["wordpress_detected"] = False
+            result["status"] = "completed"
+            return result
+        
+        result["wordpress_detected"] = True
+        
+        # Extract WordPress version from meta generator
+        version_match = re.search(r'<meta name="generator" content="WordPress ([\d.]+)"', page_content)
+        if version_match:
+            result["version"] = version_match.group(1)
+        
+        # Discover plugins from page content (core logic from wppluggin.py)
+        plugins = set(re.findall(r"/wp-content/plugins/([a-zA-Z0-9\-_]+)/", page_content))
+        
+        # Discover themes from page content
+        themes = set(re.findall(r"/wp-content/themes/([a-zA-Z0-9\-_]+)/", page_content))
+        
+        # Process each plugin (core logic from check_pluggin.py and cek_db.py)
+        for plugin in list(plugins)[:20]:  # Limit to 20 plugins
+            plugin_info = {
+                "name": plugin,
+                "version": None,
+                "outdated": False,
+                "vulnerabilities": 0,
+                "vulnerable": False
+            }
             
-            result["wordpress_detected"] = True
+            # Try to get version from changelog.txt or readme.txt
+            for file in ["readme.txt", "changelog.txt"]:
+                try:
+                    plugin_url = f"{url}/wp-content/plugins/{plugin}/{file}"
+                    presp = requests.get(plugin_url, headers=headers, timeout=10, proxies=proxies, verify=False)
+                    if presp.status_code == 200:
+                        # Extract version from Stable tag or Changelog
+                        stable_match = re.search(r'Stable tag:\s*([\d.]+)', presp.text, re.IGNORECASE)
+                        changelog_match = re.search(r'= ([\d.]+) - \d{4}-\d{2}-\d{2} =', presp.text)
+                        version_header = re.search(r'Version:\s*([\d.]+)', presp.text)
+                        
+                        if stable_match:
+                            plugin_info["version"] = stable_match.group(1)
+                        elif changelog_match:
+                            plugin_info["version"] = changelog_match.group(1)
+                        elif version_header:
+                            plugin_info["version"] = version_header.group(1)
+                        
+                        if plugin_info["version"]:
+                            break
+                except:
+                    continue
             
-            # Version
-            if "version" in data:
-                result["version"] = data["version"].get("number")
+            # Check latest version from wordpress.org (core logic from cek_db.py)
+            if plugin_info["version"]:
+                try:
+                    wp_org_url = f"https://wordpress.org/plugins/{plugin}/"
+                    wp_resp = requests.get(wp_org_url, headers=headers, timeout=10, verify=False)
+                    if wp_resp.status_code == 200:
+                        latest_match = re.search(r'Version\s*<strong>([\d.]+)</strong>', wp_resp.text)
+                        if latest_match:
+                            latest_version = latest_match.group(1)
+                            if plugin_info["version"] < latest_version:
+                                plugin_info["outdated"] = True
+                except:
+                    pass
             
-            # Plugins
-            for name, info in data.get("plugins", {}).items():
-                vulns = info.get("vulnerabilities", [])
-                result["plugins"].append({
-                    "name": name,
-                    "version": info.get("version", {}).get("number", "unknown"),
-                    "outdated": info.get("outdated", False),
-                    "vulnerabilities": len(vulns),
-                    "vulnerable": len(vulns) > 0
-                })
-                for v in vulns:
-                    result["vulnerabilities"].append({
-                        "component": f"Plugin: {name}",
-                        "title": v.get("title", "Unknown"),
-                        "type": v.get("vuln_type", "Unknown"),
-                        "severity": "high" if "critical" in str(v).lower() else "medium"
+            # Check for vulnerabilities (simplified from cek_vuln.py)
+            if plugin_info["version"]:
+                try:
+                    wpscan_url = f"https://wpscan.com/plugin/{plugin}"
+                    vuln_resp = requests.get(wpscan_url, headers=headers, timeout=10, verify=False)
+                    if vuln_resp.status_code == 200:
+                        # Count vulnerabilities affecting this version
+                        vuln_versions = re.findall(r'Fixed in\s+([\d.]+)', vuln_resp.text)
+                        vuln_titles = re.findall(r'Title\s*</div>\s*<a href="[^"]+">([^<]+)', vuln_resp.text)
+                        
+                        vuln_count = 0
+                        for vuln_ver, title in zip(vuln_versions, vuln_titles):
+                            try:
+                                if tuple(map(int, plugin_info["version"].split('.')[:3])) <= tuple(map(int, vuln_ver.split('.')[:3])):
+                                    vuln_count += 1
+                                    result["vulnerabilities"].append({
+                                        "component": f"Plugin: {plugin}",
+                                        "title": title.strip(),
+                                        "type": "unknown",
+                                        "severity": "high" if "critical" in title.lower() else "medium"
+                                    })
+                            except:
+                                continue
+                        
+                        plugin_info["vulnerabilities"] = vuln_count
+                        plugin_info["vulnerable"] = vuln_count > 0
+                except:
+                    pass
+            
+            result["plugins"].append(plugin_info)
+        
+        # Process themes
+        for theme in list(themes)[:10]:  # Limit to 10 themes
+            theme_info = {
+                "name": theme,
+                "version": None,
+                "outdated": False
+            }
+            
+            # Try to get theme version from style.css
+            try:
+                style_url = f"{url}/wp-content/themes/{theme}/style.css"
+                sresp = requests.get(style_url, headers=headers, timeout=10, proxies=proxies, verify=False)
+                if sresp.status_code == 200:
+                    version_match = re.search(r'Version:\s*([\d.]+)', sresp.text)
+                    if version_match:
+                        theme_info["version"] = version_match.group(1)
+            except:
+                pass
+            
+            result["themes"].append(theme_info)
+        
+        # User enumeration via wp-json API
+        try:
+            users_url = f"{url}/wp-json/wp/v2/users"
+            uresp = requests.get(users_url, headers=headers, timeout=10, proxies=proxies, verify=False)
+            if uresp.status_code == 200:
+                users_data = uresp.json()
+                for user in users_data[:20]:
+                    result["users"].append({
+                        "id": user.get("id"),
+                        "username": user.get("slug") or user.get("name", "")
                     })
-            
-            # Themes
-            for name, info in data.get("themes", {}).items():
-                result["themes"].append({
-                    "name": name,
-                    "version": info.get("version", {}).get("number", "unknown"),
-                    "outdated": info.get("outdated", False)
-                })
-            
-            # Users
-            for user in data.get("users", []):
-                result["users"].append({
-                    "username": user.get("username", ""),
-                    "id": user.get("id")
-                })
-            
-        except json.JSONDecodeError:
-            result["status"] = "parse_error"
-            result["error"] = "Failed to parse wpscan output"
-            
-    except subprocess.TimeoutExpired:
-        result["status"] = "timeout"
-        result["error"] = "Scan timed out after 10 minutes"
-    except FileNotFoundError:
+        except:
+            # Fallback: Try author archive enumeration
+            for i in range(1, 11):
+                try:
+                    author_url = f"{url}/?author={i}"
+                    aresp = requests.get(author_url, headers=headers, timeout=5, proxies=proxies, verify=False, allow_redirects=False)
+                    if aresp.status_code == 301 or aresp.status_code == 302:
+                        location = aresp.headers.get("Location", "")
+                        author_match = re.search(r'/author/([^/]+)', location)
+                        if author_match:
+                            result["users"].append({
+                                "id": i,
+                                "username": author_match.group(1)
+                            })
+                except:
+                    continue
+        
+    except requests.RequestException as e:
         result["status"] = "error"
-        result["error"] = "wpscan not installed. Run: gem install wpscan"
+        result["error"] = f"Connection failed: {str(e)}"
     except Exception as e:
         result["status"] = "error"
         result["error"] = str(e)
     
     return result
+
