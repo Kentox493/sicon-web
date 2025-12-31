@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { scansAPI } from '../services/api';
+import { useNotificationStore } from './notificationStore';
 
 export const useScanStore = create((set, get) => ({
     scans: [],
@@ -26,6 +27,14 @@ export const useScanStore = create((set, get) => ({
         set({ isLoading: true, error: null });
         try {
             const scan = await scansAPI.create(target, options);
+
+            // Trigger notification
+            useNotificationStore.getState().addNotification({
+                type: 'info',
+                title: 'Scan Started',
+                message: `Reconnaissance scan initiated for ${target}`,
+            });
+
             set((state) => ({
                 scans: [scan, ...state.scans],
                 currentScan: scan,
@@ -33,6 +42,11 @@ export const useScanStore = create((set, get) => ({
             }));
             return scan;
         } catch (error) {
+            useNotificationStore.getState().addNotification({
+                type: 'error',
+                title: 'Scan Failed',
+                message: error.response?.data?.detail || 'Failed to start scan',
+            });
             set({
                 error: error.response?.data?.detail || 'Failed to start scan',
                 isLoading: false
