@@ -4,6 +4,7 @@ import { Shield, Server, Globe, Layers, FileCode, Folder, Loader2, CheckCircle2,
 import { Card, CardContent, CardHeader, CardTitle } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
+import { ConfirmModal } from '../components/common/Modal';
 import { useScanStore } from '../store/scanStore';
 import { cn } from '../utils/cn';
 
@@ -25,6 +26,7 @@ const ActiveScan = () => {
     const { currentScan, getScan, stopScan, isLoading, error } = useScanStore();
     const [activeTab, setActiveTab] = useState('waf');
     const [isStopping, setIsStopping] = useState(false);
+    const [showStopConfirm, setShowStopConfirm] = useState(false);
 
     useEffect(() => {
         if (!scanId) {
@@ -48,6 +50,7 @@ const ActiveScan = () => {
         setIsStopping(true);
         await stopScan(parseInt(scanId));
         setIsStopping(false);
+        setShowStopConfirm(false);
     };
 
     if (isLoading && !currentScan) {
@@ -82,6 +85,17 @@ const ActiveScan = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
+            <ConfirmModal
+                isOpen={showStopConfirm}
+                onClose={() => setShowStopConfirm(false)}
+                onConfirm={handleStopScan}
+                title="Stop Active Scan?"
+                message={`Are you sure you want to stop the scan for ${target}? This action cannot be undone and partial results will be saved.`}
+                confirmText="Stop Scan"
+                isDanger
+                isLoading={isStopping}
+            />
+
             <div className="flex justify-between items-end">
                 <div>
                     <h1 className="text-3xl font-bold text-text-primary">
@@ -93,7 +107,7 @@ const ActiveScan = () => {
                     {(status === 'running' || status === 'pending') && (
                         <Button
                             variant="destructive"
-                            onClick={handleStopScan}
+                            onClick={() => setShowStopConfirm(true)}
                             disabled={isStopping}
                             className="bg-status-danger hover:bg-status-danger/80"
                         >

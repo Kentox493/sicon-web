@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import Toast from '../common/Toast';
 import { cn } from '../../utils/cn';
 
 const Layout = () => {
@@ -38,6 +39,9 @@ const Layout = () => {
                     </div>
                 </main>
             </div>
+
+            {/* Global Toast Notifications */}
+            <Toast />
         </div>
     );
 };
