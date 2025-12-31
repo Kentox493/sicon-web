@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Shield, Server, Globe, Layers, FileCode, Folder, Loader2, CheckCircle2, XCircle, Clock, AlertCircle, AlertTriangle, ExternalLink, StopCircle } from 'lucide-react';
+import { Shield, Server, Globe, Layers, FileCode, Folder, Loader2, CheckCircle2, XCircle, Clock, AlertCircle, AlertTriangle, ExternalLink, StopCircle, Code2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
@@ -14,6 +14,7 @@ const tabs = [
     { id: 'cms', label: 'CMS', icon: Layers },
     { id: 'tech', label: 'Tech Stack', icon: FileCode },
     { id: 'dir', label: 'Directories', icon: Folder },
+    { id: 'wp', label: 'WordPress', icon: Code2 },
 ];
 
 const ActiveScan = () => {
@@ -76,6 +77,7 @@ const ActiveScan = () => {
         { name: 'cms', label: 'CMS', status: getModuleStatus('cms', current_module, results, status) },
         { name: 'tech', label: 'Tech', status: getModuleStatus('tech', current_module, results, status) },
         { name: 'dir', label: 'Dir', status: getModuleStatus('dir', current_module, results, status) },
+        { name: 'wp', label: 'WP', status: getModuleStatus('wp', current_module, results, status) },
     ];
 
     return (
@@ -237,6 +239,7 @@ const ResultContent = ({ module, data }) => {
         case 'cms': return <CmsResult data={data} />;
         case 'tech': return <TechResult data={data} />;
         case 'dir': return <DirResult data={data} />;
+        case 'wp': return <WpResult data={data} />;
         default: return <pre className="text-xs">{JSON.stringify(data, null, 2)}</pre>;
     }
 };
@@ -419,6 +422,104 @@ const DirResult = ({ data }) => (
                 <p className="text-center text-text-secondary py-8">No directories found</p>
             )}
         </div>
+    </div>
+);
+
+const WpResult = ({ data }) => (
+    <div className="space-y-6">
+        {/* WordPress Detection Status */}
+        <div className={cn(
+            "flex items-center gap-4 p-6 rounded-lg border",
+            data.wordpress_detected ? "bg-accent-primary/5 border-accent-primary/20" : "bg-background-tertiary border-border"
+        )}>
+            <Code2 className={cn("w-16 h-16", data.wordpress_detected ? "text-accent-primary" : "text-text-secondary")} />
+            <div className="flex-1">
+                <h3 className="text-2xl font-bold">{data.wordpress_detected ? "WordPress Detected" : "No WordPress Found"}</h3>
+                {data.version && <p className="text-text-secondary mt-1">Version: {data.version}</p>}
+            </div>
+            {data.wordpress_detected && (
+                <Badge variant="success" className="text-lg px-4 py-2">DETECTED</Badge>
+            )}
+        </div>
+
+        {/* Plugins */}
+        {data.plugins?.length > 0 && (
+            <div className="space-y-3">
+                <h4 className="font-semibold flex items-center gap-2">
+                    Plugins <Badge variant="outline">{data.plugins.length}</Badge>
+                </h4>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {data.plugins.map((p, i) => (
+                        <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-background-tertiary/50 hover:bg-background-tertiary transition-colors">
+                            <div className="flex items-center gap-3">
+                                <span className="font-medium">{p.name}</span>
+                                <Badge variant="outline" className="text-xs">{p.version || '?'}</Badge>
+                            </div>
+                            <div className="flex gap-2">
+                                {p.outdated && <Badge variant="warning">Outdated</Badge>}
+                                {p.vulnerable && <Badge variant="danger">{p.vulnerabilities} Vulns</Badge>}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {/* Themes */}
+        {data.themes?.length > 0 && (
+            <div className="space-y-3">
+                <h4 className="font-semibold flex items-center gap-2">
+                    Themes <Badge variant="outline">{data.themes.length}</Badge>
+                </h4>
+                <div className="space-y-2">
+                    {data.themes.map((t, i) => (
+                        <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-background-tertiary/50">
+                            <span className="font-medium">{t.name}</span>
+                            <div className="flex gap-2">
+                                <Badge variant="outline">{t.version || '?'}</Badge>
+                                {t.outdated && <Badge variant="warning">Outdated</Badge>}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {/* Users */}
+        {data.users?.length > 0 && (
+            <div className="space-y-3">
+                <h4 className="font-semibold flex items-center gap-2">
+                    Enumerated Users <Badge variant="outline">{data.users.length}</Badge>
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                    {data.users.map((u, i) => (
+                        <Badge key={i} variant="outline" className="px-3 py-1">
+                            #{u.id}: {u.username}
+                        </Badge>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {/* Vulnerabilities */}
+        {data.vulnerabilities?.length > 0 && (
+            <div className="space-y-3">
+                <h4 className="font-semibold flex items-center gap-2 text-status-danger">
+                    <AlertTriangle className="w-4 h-4" /> Known Vulnerabilities <Badge variant="danger">{data.vulnerabilities.length}</Badge>
+                </h4>
+                <div className="space-y-2">
+                    {data.vulnerabilities.map((v, i) => (
+                        <div key={i} className="p-3 rounded-lg bg-status-danger/10 border border-status-danger/20">
+                            <div className="flex items-center justify-between">
+                                <span className="font-medium text-status-danger">{v.title}</span>
+                                <Badge variant={v.severity === 'high' ? 'danger' : 'warning'}>{v.severity?.toUpperCase()}</Badge>
+                            </div>
+                            <p className="text-sm text-text-secondary mt-1">{v.component}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
     </div>
 );
 
