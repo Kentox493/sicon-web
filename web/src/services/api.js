@@ -81,6 +81,11 @@ export const scansAPI = {
     delete: async (scanId) => {
         await api.delete(`/api/scans/${scanId}`);
     },
+
+    stop: async (scanId) => {
+        const response = await api.post(`/api/scans/${scanId}/stop`);
+        return response.data;
+    },
 };
 
 // Reports API

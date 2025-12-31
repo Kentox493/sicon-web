@@ -52,3 +52,20 @@ async def delete_scan(scan_id: int, db: Session = Depends(get_db), current_user:
     db.delete(scan)
     db.commit()
     return None
+
+@router.post("/{scan_id}/stop", response_model=ScanResponse)
+async def stop_scan(scan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Stop a running scan by marking it as cancelled."""
+    scan = db.query(Scan).filter(Scan.id == scan_id, Scan.user_id == current_user.id).first()
+    if not scan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
+    
+    if scan.status not in ["pending", "running"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Scan is not running")
+    
+    scan.status = "cancelled"
+    scan.current_module = None
+    db.commit()
+    db.refresh(scan)
+    return scan
+

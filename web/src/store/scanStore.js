@@ -91,6 +91,23 @@ export const useScanStore = create((set, get) => ({
     // Clear current scan
     clearCurrentScan: () => set({ currentScan: null }),
 
+    // Stop a running scan
+    stopScan: async (scanId) => {
+        try {
+            const scan = await scansAPI.stop(scanId);
+            useNotificationStore.getState().addNotification({
+                type: 'warning',
+                title: 'Scan Stopped',
+                message: `Scan #${scanId} has been cancelled`,
+            });
+            set({ currentScan: scan });
+            return scan;
+        } catch (error) {
+            set({ error: error.response?.data?.detail || 'Failed to stop scan' });
+            return null;
+        }
+    },
+
     // Clear error
     clearError: () => set({ error: null }),
 }));

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Shield, Server, Globe, Layers, FileCode, Folder, Loader2, CheckCircle2, XCircle, Clock, AlertCircle, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Shield, Server, Globe, Layers, FileCode, Folder, Loader2, CheckCircle2, XCircle, Clock, AlertCircle, AlertTriangle, ExternalLink, StopCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
@@ -21,8 +21,9 @@ const ActiveScan = () => {
     const navigate = useNavigate();
     const scanId = searchParams.get('id');
 
-    const { currentScan, getScan, isLoading, error } = useScanStore();
+    const { currentScan, getScan, stopScan, isLoading, error } = useScanStore();
     const [activeTab, setActiveTab] = useState('waf');
+    const [isStopping, setIsStopping] = useState(false);
 
     useEffect(() => {
         if (!scanId) {
@@ -34,13 +35,19 @@ const ActiveScan = () => {
 
         const interval = setInterval(async () => {
             const scan = await getScan(parseInt(scanId));
-            if (scan && (scan.status === 'completed' || scan.status === 'failed')) {
+            if (scan && (scan.status === 'completed' || scan.status === 'failed' || scan.status === 'cancelled')) {
                 clearInterval(interval);
             }
         }, 2000);
 
         return () => clearInterval(interval);
     }, [scanId, getScan, navigate]);
+
+    const handleStopScan = async () => {
+        setIsStopping(true);
+        await stopScan(parseInt(scanId));
+        setIsStopping(false);
+    };
 
     if (isLoading && !currentScan) {
         return (
@@ -76,11 +83,28 @@ const ActiveScan = () => {
             <div className="flex justify-between items-end">
                 <div>
                     <h1 className="text-3xl font-bold text-text-primary">
-                        {status === 'running' ? 'Scanning...' : status === 'completed' ? 'Scan Complete' : 'Scan Failed'}
+                        {status === 'running' ? 'Scanning...' : status === 'completed' ? 'Scan Complete' : status === 'cancelled' ? 'Scan Cancelled' : 'Scan Failed'}
                     </h1>
                     <p className="text-accent-primary font-mono mt-1">{target}</p>
                 </div>
-                <Badge variant="outline" className="px-3 py-1">ID: #{currentScan.id}</Badge>
+                <div className="flex items-center gap-3">
+                    {(status === 'running' || status === 'pending') && (
+                        <Button
+                            variant="destructive"
+                            onClick={handleStopScan}
+                            disabled={isStopping}
+                            className="bg-status-danger hover:bg-status-danger/80"
+                        >
+                            {isStopping ? (
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            ) : (
+                                <StopCircle className="w-4 h-4 mr-2" />
+                            )}
+                            Stop Scan
+                        </Button>
+                    )}
+                    <Badge variant="outline" className="px-3 py-1">ID: #{currentScan.id}</Badge>
+                </div>
             </div>
 
             {/* Progress Card */}
