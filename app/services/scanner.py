@@ -633,7 +633,7 @@ def run_directory_scan(target: str, proxy: Optional[str] = None, user_agent: Opt
         if proxy:
             cmd.extend(["--proxy", sanitize_command_arg(proxy)])
         
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
         
         directories = []
         status_count = {"200": 0, "301": 0, "302": 0, "403": 0, "500": 0}
